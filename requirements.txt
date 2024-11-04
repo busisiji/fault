@@ -1,0 +1,14 @@
+crcmod==1.7
+keras==2.10.0
+matplotlib==3.5.2
+numpy==1.22.4
+pandas==1.4.2
+pygame==2.1.2
+pyserial==3.5
+qdarkgraystyle==1.0.2
+QDarkStyle==3.1
+qt_material==2.12
+requests==2.27.1
+scikit_learn==1.2.0
+tensorflow==2.11.0
+tensorflow_gpu==2.10.1
