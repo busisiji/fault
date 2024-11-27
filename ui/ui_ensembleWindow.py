@@ -1,7 +1,4 @@
 import os
-import threading
-import time
-from tkinter import messagebox
 
 import pandas as pd
 from PyQt5.QtCore import *
@@ -11,9 +8,8 @@ from PyQt5.QtWidgets import *
 import config
 from config import font
 from ui.qss import btn_css
-from ui.ui_fun import setQMessageBox, BaseWindow, MyLabel
-from ui.ui_led import MyLed
-from utils.collect import get_new_datas, get_new_data
+from ui.others.ui_fun import setQMessageBox, BaseWindow, MyLabel
+from ui.others.ui_led import MyLed
 from utils.data_load import data_balance
 from utils.gettty import main
 from utils.my_thread import DataTableThread, MyThread
@@ -471,7 +467,7 @@ class EnsembleWindow(BaseWindow):
                 "color: rgb(0, 200, 0);\n"
                 "}"
             )
-            # self.btn_group.addButton(btn)
+            # self.btn_group.addButton(btn) # 单选
             self.btns.append(btn)
             self.VLayout_6.addWidget(btn)
 

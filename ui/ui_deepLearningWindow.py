@@ -1,22 +1,17 @@
-import csv
 import os
 import threading
 
 import pandas as pd
-from PyQt5 import QtWidgets
-from PyQt5.QtGui import QFont, QCursor, QIcon, QPixmap, QMovie
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
-    QTableWidget, QTableWidgetItem, QTextEdit, QGroupBox, QStackedWidget, QSizePolicy, QFrame, QMessageBox, QCheckBox, \
-    QHeaderView, QComboBox, QStackedLayout
-from PyQt5.QtCore import Qt, QSize, QRect
+from PyQt5.QtGui import QFont, QIcon, QMovie
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QPushButton, QLabel, \
+    QTableWidget, QTableWidgetItem, QGroupBox, QMessageBox, QCheckBox, \
+    QHeaderView, QStackedLayout
+from PyQt5.QtCore import Qt, QSize
 from PyQt5.uic.properties import QtCore
-from matplotlib import pyplot as plt
-from matplotlib.font_manager import FontProperties
 
 import config
 from lib.sequential_model import get_result, start
-from ui.ui_fun import BaseWindow, MyFigure
-from utils.mongo import start_draw_final
+from ui.others.ui_fun import BaseWindow, MyFigure
 
 
 class DeepLearningWindow(BaseWindow):
@@ -28,18 +23,10 @@ class DeepLearningWindow(BaseWindow):
         self.setWindowState(Qt.WindowMaximized)
         self.setWindowTitle('深度学习')
 
-        # try:
-        #     self.model, self.history = mythread.get_result()
-        # except Exception as e:
-        #     print(e)
-        #     time.sleep(3)
-        #     self.model, self.history = mythread.get_result()
-
         self.setbox_1()
         self.setbox_2()
         self.setbox_3()
         self.setbox_4()
-        # self.setbox_5()
         self.groupbox2_1.setMinimumSize(QSize(self.width(), self.height() * 0.4))
         self.groupbox_1.setMinimumSize(QSize(self.width(), self.height() * 0.4))
         self.groupbox_3.setMinimumSize(QSize(self.width(), self.height() * 0.2))

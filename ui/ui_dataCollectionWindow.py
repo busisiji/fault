@@ -3,19 +3,15 @@ import os
 import threading
 
 import numpy as np
-import pandas as pd
-from PyQt5 import QtWidgets
-from PyQt5.QtGui import QFont, QCursor, QIcon, QPixmap
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
-    QTableWidget, QTableWidgetItem, QTextEdit, QGroupBox, QStackedWidget, QSizePolicy, QFrame, QMessageBox, QCheckBox, \
-    QHeaderView, QComboBox, QAbstractItemView
-from PyQt5.QtCore import Qt, QSize, QRect
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QPushButton, QLabel, \
+    QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QMessageBox, QHeaderView, QComboBox, QAbstractItemView
+from PyQt5.QtCore import Qt, QSize
 from matplotlib import pyplot as plt
-from matplotlib.font_manager import FontProperties
 
 import config
 from ui.qss import btn_css
-from ui.ui_fun import BaseWindow, MyFigure
+from ui.others.ui_fun import BaseWindow
 from utils.collect import get_new_data
 from utils.mongo import start_draw_final
 
@@ -63,6 +59,8 @@ class DataCollectionWindow(BaseWindow):
         self.VLayout_1.setSpacing(0)
 
         self.table = QTableWidget()
+        # 设置水平滚动条策略
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.table.setColumnCount(len(config.get_feature_default(self.menuIndex))+1) # 表格列数
         self.table.setHorizontalHeaderLabels( config.get_feature_default(self.menuIndex)+["操作"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # 宽高自动分配

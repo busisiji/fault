@@ -1,18 +1,15 @@
 import logging
 import os.path
-import sys
 
-import numpy as np
-from PyQt5.QtGui import QFont, QCursor, QIcon, QPixmap
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
-    QTableWidget, QTableWidgetItem, QTextEdit, QGroupBox, QStackedWidget, QSizePolicy, QFrame
-from PyQt5.QtCore import Qt, QSize, QRect
+from PyQt5.QtGui import QCursor, QIcon
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QTableWidget, \
+    QTextEdit, QGroupBox, QStackedWidget, QSizePolicy, QFrame
+from PyQt5.QtCore import Qt, QSize
 
 import config
 # from ui.ui_led import MyLed
-from pyqt_led import Led
 
-from ui.ui_led import LedWindow
+from ui.others.ui_led import LedWindow
 
 
 class MainWindow(QMainWindow):

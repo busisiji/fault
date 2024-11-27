@@ -1,3 +1,5 @@
+import datetime
+import logging
 import threading
 import time
 from collections import Counter
@@ -11,6 +13,13 @@ from pandas import DataFrame
 import config
 from utils.collect import get_new_datas
 
+class Worker(QThread):
+    finished = pyqtSignal()
+
+    def run(self):
+        # 这里执行耗时操作
+        # 例如：数据库查询、网络请求等
+        self.finished.emit()
 
 class MyThread(QThread):
     '''自定义线程类'''
@@ -30,6 +39,76 @@ class MyThread(QThread):
             return self.result
         except Exception:
             return None
+
+class NewMyThread(QThread):
+    '''自定义线程类'''
+    _signal = pyqtSignal(str)
+    def __init__(self, func, args=()):
+        super().__init__()
+        self.func = func
+        self.args = args
+
+    def run(self):
+        try:
+            self.result = self.func(*self.args)
+        except Exception as e:
+            self._signal.emit(e)
+        else:
+            self._signal.emit('OK')
+
+    def get_result(self):
+        self.wait()  # 等待线程执行完毕
+        try:
+            return self.result
+        except Exception:
+            return None
+
+
+class DataProcessingThread(QThread):
+    data_processed = pyqtSignal(list, list)
+
+    def __init__(self, param_names, results, param_checkboxes, lines, axes, param_positions, time_axis, data):
+        super().__init__()
+        """绘图"""
+        self.param_names = param_names
+        self.results = results
+        self.param_checkboxes = param_checkboxes
+        self.lines = lines
+        self.axes = axes
+        self.param_positions = param_positions
+        self.time_axis = time_axis
+        self.data = data
+
+    def run(self):
+        current_time = datetime.datetime.now()
+        processed_params = []
+        processed_results = []
+
+        for param, value in zip(self.param_names, self.results):
+            if self.param_checkboxes.get(param) and self.param_checkboxes[param].isChecked():
+                try:
+                    param = config.convert_to_db_columns([param])[0]
+                except Exception as e:
+                    logging.error(f"转换参数时发生错误: {e}")
+                    continue
+
+                if value is not None:
+                    try:
+                        value = float(value)
+                    except ValueError as e:
+                        logging.error(f"转换值时发生错误: {e}")
+                        continue
+
+                    self.data[param].append(value)
+                    self.time_axis[param].append(current_time)
+                    if param in self.lines:
+                        positions = self.param_positions[param]
+                        if positions in self.axes:
+                            processed_params.append(param)
+                            processed_results.append((positions, self.time_axis[param], self.data[param]))
+
+        self.data_processed.emit(processed_params, processed_results)
+
 
 class DataTableThread(QThread):
     _signal_message = pyqtSignal(str)
@@ -162,4 +241,3 @@ class DataTableThread(QThread):
         except Exception as e:
             self._signal_message.emit(str(e))
             return False
-

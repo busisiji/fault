@@ -20,7 +20,7 @@ class Loading_Win(QWidget):
         # 设置背景透明
         # self.setAttribute(Qt.WA_TranslucentBackground)
         # 加载动画画面
-        self.loading_gif = QMovie('../icons/logo.gif')
+        self.loading_gif = QMovie('../../icons/logo.gif')
         self.loading_label = QLabel(self)
         self.loading_label.setMovie(self.loading_gif)
         self.loading_gif.start()

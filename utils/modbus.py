@@ -2,12 +2,20 @@ import serial
 import crcmod
 import time
 import struct
+
+from pymodbus.constants import Endian
+from pymodbus.payload import BinaryPayloadDecoder, BinaryPayloadBuilder
+
+
 # CRC16校验，返回整型数
 def crc16(veritydata):
     if not veritydata:
         return
     crc16 = crcmod.mkCrcFun(0x18005, rev=True, initCrc=0xFFFF, xorOut=0x0000)
     return crc16(veritydata)
+
+
+
 
 # 校验数据帧的CRC码是否正确
 def checkcrc(data):

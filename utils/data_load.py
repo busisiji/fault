@@ -4,6 +4,7 @@ from sklearn.preprocessing import StandardScaler
 
 import config
 feature = ["Z 轴振动速度","X 轴振动速度","Z 轴加速度峰值","X 轴加速度峰值","Z 轴峰值速度分量频率 Hz","X 轴峰值速度分量频率 Hz","Z 轴加速度均方根","X 轴加速度均方根"]
+
 def get_datas_from_csv(features=None, path=config.train_path):
     # from sklearn.preprocessing import StandardScaler
     res =[]

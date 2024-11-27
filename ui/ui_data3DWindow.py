@@ -1,17 +1,14 @@
-import os
-
 import pandas as pd
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QFont, QCursor, QIcon, QPixmap
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
-    QTableWidget, QTableWidgetItem, QTextEdit, QGroupBox, QStackedWidget, QSizePolicy, QFrame, QMessageBox, QCheckBox
-from PyQt5.QtCore import Qt, QSize, QRect
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QPushButton, QGroupBox, QMessageBox, QCheckBox
+from PyQt5.QtCore import Qt, QSize
 from matplotlib import pyplot as plt
 from matplotlib.font_manager import FontProperties
 
 import config
 from ui.qss import btn_css
-from ui.ui_fun import BaseWindow, MyFigure
+from ui.others.ui_fun import BaseWindow, MyFigure
 
 class Data3DWindow(BaseWindow):
     '''3D数据图参数选择窗口'''

@@ -43,7 +43,7 @@ def run_modbus_tcp_server():
 
     # 启动定时任务
     register_address = 0  # 指定起始寄存器地址
-    num = 10  # 指定要更新的寄存器数量
+    num = 100  # 指定要更新的寄存器数量
     value_generator = (i for i in range(1000))  # 生成器，产生从0到999的值
     interval = 1  # 定时间隔（秒）
     update_thread = threading.Thread(target=update_register, args=(store, register_address, num, value_generator, interval))

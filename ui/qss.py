@@ -86,7 +86,8 @@ QLineEdit {
         color: #DC3545;
 }
 """
-def btn_css(btn):
+def btn_css(btn,index=1):
+    if index == 1:
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #228B22;
@@ -104,6 +105,35 @@ def btn_css(btn):
                 color: white;
             }
         """)
+    elif index == 2:
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555;
+                border: 1px solid #444;
+                padding: 5px 10px;
+                border-radius: 5px;
+                color: #fff;
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }
+                    """
+                          )
+    elif index == 3:
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #228B22;
+                color: white;
+                border: 1px solid black;
+                border-radius: 5px;
+                padding: 5px 10px;
+            }
+            QPushButton:hover {
+                background-color: #666;
+            }
+                    """
+                          )
+
 
 class Ui_Form(QWidget):
     def __init__(self):
