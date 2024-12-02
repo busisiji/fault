@@ -1,18 +1,15 @@
 import sys
 import json
-import time
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, \
+from PyQt5.QtWidgets import QApplication, QVBoxLayout, QWidget, QTableWidget, QTableWidgetItem, \
     QPushButton, QComboBox, QLineEdit, QMessageBox, QDialog, QLabel, QInputDialog, QTabWidget, QHBoxLayout, \
     QDialogButtonBox, QSizePolicy, QHeaderView, QFormLayout, QSpinBox
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
-from pandas.io.sql import DatabaseError
 
 import config
 from db.db_mysql import DB_MySQL
-from ui.others.ui_fun import BaseWindow
-from ui.qss import btn_css
+from ui.Base.baseWindow import BaseWindow
+from qss.qss import btn_css
 
 # 假设 DB_Mysql 类已经定义好了
 
@@ -322,17 +319,14 @@ class ConfigWindow(BaseWindow):
         dialog.sensor_name.setText(sensor_name)
         if dialog.exec_() == QDialog.Accepted:
             new_sensor = {
-                'sensor_name': dialog.sensor_name.text(),
                 'status_list': [status.strip() for status in dialog.status_list.text().split(',') if status.strip()],
                 'params': dialog.params,
-                'data_type': dialog.get_data_type()  # 调用 get_data_type 方法获取数据类型
+                'data_type': list(dialog.get_data_type())  # 调用 get_data_type 方法获取数据类型
             }
-            if not any(s['sensor_name'] == new_sensor['sensor_name'] for s in self.numeric_sensors):
-                self.numeric_sensors.append(new_sensor)
-                self.update_sensor_list()
-                QMessageBox.information(self, "成功", f"数值型传感器 {sensor_name} 已成功添加。")
-            else:
-                QMessageBox.warning(self, "警告", "传感器名称已存在。")
+            new_sensor['sensor_name'] = sensor_name
+            self.numeric_sensors.append(new_sensor)
+            self.update_sensor_list()
+            QMessageBox.information(self, "成功", f"数值型传感器 {sensor_name} 已成功添加。")
 
 
     def add_switch_sensor(self):

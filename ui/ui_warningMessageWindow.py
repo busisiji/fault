@@ -1,18 +1,14 @@
 import sys
-import json
-import time
-import matplotlib.pyplot as plt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QInputDialog, QMessageBox, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QVBoxLayout, QPushButton, QInputDialog
 from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QColor
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
 import config
 from db.db_mysql import DB_MySQL
-from ui.others.ui_fun import BaseWindow
-from ui.qss import btn_css
+from ui.Base.baseWindow import BaseWindow
+
 
 class WarningMessageWindow(BaseWindow):
     """传感器配置界面"""
@@ -30,8 +26,7 @@ class WarningMessageWindow(BaseWindow):
                                   ('name', 'VARCHAR(255)'),
                                   ('value', 'DOUBLE'),
                                   ('unit', 'VARCHAR(255)'),
-                                  ('warning_time', 'DATETIME'),
-                                  ('desc', 'TEXT')])  # 状态 ：0 正常 1 异常
+                                  ('warning_time', 'DATETIME')])  # 状态 ：0 正常 1 异常
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.read_data_and_plot)
         self.read_data_and_plot()  # 初始化时显示柱状图

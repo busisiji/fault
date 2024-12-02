@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt
 
 import config
 from db.db_mysql import DB_MySQL
-from ui.qss import btn_css
+from qss.qss import btn_css
 from ui.ui_dataCollectionWindow import DataCollectionWindow
 
 

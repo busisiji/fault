@@ -1,29 +1,25 @@
+# coding: utf-8
+
 import json
-import logging
 import os
 import sys
 
 import pandas as pd
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QIcon
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QMainWindow, QPushButton, QSpinBox, QVBoxLayout, QWidget, QInputDialog, QMessageBox,
-    QButtonGroup, QTabWidget, QFileDialog
+    QLineEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget, QInputDialog, QMessageBox,
+    QButtonGroup, QTabWidget, QFileDialog, QTextEdit
 )
-from sklearn.preprocessing import StandardScaler
 
 import config
 from db.db_mysql import DB_MySQL
-from lib.faultDiagnosis_model import faultDiagnosisModel
-from ui.others.ui_fun import BaseWindow
-from ui.qss import btn_css
-from utils.data_load import data_balance
-from utils.frozen_dir import app_path, exists_path
-from utils.my_thread import MyThread, NewMyThread
+from ui.Base.baseWindow import BaseWindow
+from qss.qss import btn_css
+from utils.frozen_dir import exists_path
+from utils.my_thread import NewMyThread
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class TrainWindow(BaseWindow):
     '''集成学习窗口'''
@@ -215,17 +211,31 @@ class TrainWindow(BaseWindow):
         # self.select_path_button.setFont(font)
         # self.select_path_button.clicked.connect(self.select_save_path)
 
-        # 开始训练按钮
-        self.start_training_button = QPushButton('开始训练')
-        btn_css(self.start_training_button)
-        self.start_training_button.setFont(font)
-        self.start_training_button.clicked.connect(self.start_training)
+        buttons = [
+            ('开始训练', self.start_training),
+        ]
+        # 辅助函数：创建并设置按钮
+        def create_button(text, callback):
+            btn = QPushButton()
+            btn.setText(text)
+            btn.clicked.connect(lambda checked, cb=callback: self.safe_call(cb, text))
+            btn_css(btn)
+            btn.setMinimumSize(200, 30)
+            if text == '开始训练':
+                self.start_training_button = btn
+
+            return btn
+
 
         # 添加控件到布局
         self.VLayout_10.addWidget(self.save_path_label)
         self.VLayout_10.addWidget(self.save_path_lineedit)
 #         self.VLayout_10.addWidget(self.select_path_button)
-        self.VLayout_10.addWidget(self.start_training_button)
+#         self.VLayout_10.addWidget(self.start_training_button)
+        # 将按钮添加到相应的布局中
+        for i, (text, callback) in enumerate(buttons):
+            btn = create_button(text, callback)
+            self.VLayout_10.addWidget(btn)
 
         self.groupbox_10.setLayout(self.VLayout_10)
 
@@ -266,17 +276,16 @@ class TrainWindow(BaseWindow):
                 self.label_combobox.setItemText(current_index, text)
 
     def start_training(self):
-        # if self.parent.IsRun:
-        #     QMessageBox.warning(self, "警告", "有任务运行中!")
-        #     return
-        # else:
-        #     self.parent.setRun('模型训练中')
-
         # 获取保存路径
+        Is_sensor = 0
+        Is_param = 0
+        Is_state = []
+        Is_states = []
+
         save_path = self.save_path_lineedit.text()
         if not save_path:
             self.parent.setRun()
-            QMessageBox.warning(self, '警告', '请选择保存路径')
+            QMessageBox.warning(self, '警告', '未找到保存路径')
             return
         sensor_name = ''
         try:
@@ -289,6 +298,11 @@ class TrainWindow(BaseWindow):
             # 获取标签列表
             labels = [self.label_combobox.itemText(i) for i in range(self.label_combobox.count())]
 
+            if not labels:
+                self.parent.setRun()
+                self.show_message('标签列表为空')
+                return
+
             # 获取所有传感器信息
             sensors = config.get_sensors()
 
@@ -299,16 +313,21 @@ class TrainWindow(BaseWindow):
                 sensor_name = sensor['sensor_name']
                 if not sensor['param_name']:
                     continue  # 跳过没有参数的传感器
-
+                Is_sensor += 1
+                Is_state = []
                 # 获取选中的参数
                 selected_params = []
                 for checkbox in self.param_checkboxes[sensor['sensor_name']]:
-                    if checkbox.isChecked():
-                        selected_params.append(checkbox.text())
+                    try:
+                        if checkbox.isChecked():
+                            selected_params.append(checkbox.text())
+                    except:
+                        pass
 
                 if not selected_params:
                     # QMessageBox.warning(self, '警告', f'请选择{sensor_name}的参数')
                     continue
+                Is_param += 1
 
                 with self.db:
                     sensor_data = self.db.select_data(config.toname['数据采集'],
@@ -337,10 +356,18 @@ class TrainWindow(BaseWindow):
 
                     if not X:
                         continue  # 没有数据则跳过
+                    else:
+                        Is_state.append(label)
 
                     # 将 X 转换为 DataFrame 并设置表头
                     df_X = pd.DataFrame(X, columns=selected_params)
                     res.append(df_X)
+
+                if set(Is_state) != set(labels):
+                    QMessageBox.warning(self, '警告', f'{sensor_name}没有{labels}标签的数据')
+                    continue
+                else:
+                    Is_states = Is_state
 
                 # 进行训练
                 if not res:
@@ -358,20 +385,53 @@ class TrainWindow(BaseWindow):
                     self.thread.start()
                     # self.parent.fualt_model.train_models(path)
                 except Exception as e:
+                    self.parent.setRun()
                     QMessageBox.critical(self, '错误', f'{sensor_name}模型训练失败: {str(e)}')
                     continue
 
+            if not Is_sensor:
+                self.show_message('没有找到传感器')
+                self.parent.setRun()
+            elif not Is_param:
+                self.show_message('没有勾选参数')
+                self.parent.setRun()
+            elif set(Is_states) != set(labels):
+                self.show_message('数据库标签数据与标签列表不匹配')
+                self.parent.setRun()
         except Exception as e:
             self.parent.setRun()
             QMessageBox.critical(self, '错误', f'模型训练失败: {str(e)}')
 
-
-    def theard_finished(self,e):
+    def theard_finished(self, e):
         self.parent.setRun()
         if e == 'OK':
-            QMessageBox.information(self, '成功', f'模型训练完成')
+            # 显示预测精度
+            # 创建一个对话框显示精度信息
+
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Information)
+            msg_box.setWindowTitle('模型训练完成')
+            msg_box.setText('模型训练完成，以下是各模型的预测精度：\n\n')
+
+            # 创建详细信息文本
+            detailed_text = ""
+            precision_info = self.thread.get_result()
+            for precision_str in precision_info:
+                model, precision = precision_str.split(':')[0], float(precision_str.split(':')[1])
+                detailed_text += f"{model}  预测的精度是: {precision:.4f}\n"
+
+            # 创建一个 QTextEdit 来显示详细信息
+            text_edit = QTextEdit()
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(detailed_text)
+
+            # 将 QTextEdit 添加到 QMessageBox 中
+            msg_box.layout().addWidget(text_edit, 1, 0, 1, -1)
+
+            msg_box.exec_()
+
         else:
-            QMessageBox.critical(self, '错误', f'模型训练失败: {str(e)}')
+            self.show_message(f'模型训练失败: {str(e)}')
     def update_ui(self):
         # 获取最新的传感器信息
         old_sensors = self.sensors
@@ -396,7 +456,7 @@ class TrainWindow(BaseWindow):
                 param_checkboxes = []
                 for i, param in enumerate(sensor['param_name']):
                     checkbox = QCheckBox(param)
-                    checkbox.setChecked(True)  # 默认选中
+                    # checkbox.setChecked(True)  # 默认选中
                     checkbox.setFont(QFont('Arial', 12))
                     param_checkboxes.append(checkbox)
                     grid_layout.addWidget(checkbox, i // 4, i % 4)
@@ -427,12 +487,10 @@ class TrainWindow(BaseWindow):
                 param_checkboxes = []
                 for i, param in enumerate(sensor['param_name']):
                     checkbox = QCheckBox(param)
-                    checkbox.setChecked(True)  # 默认选中
+                    # checkbox.setChecked(True)  # 默认选中
                     checkbox.setFont(QFont('Arial', 12))
                     param_checkboxes.append(checkbox)
                     grid_layout.addWidget(checkbox, i // 4, i % 4)
-
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

@@ -1,3 +1,4 @@
+# coding: utf-8
 import os
 
 import pandas as pd
@@ -62,10 +63,6 @@ class MachineLearningModel():
             y_pred = self.model.predict(test_x)
             # print(len(y_pred),len(test_y))
             self.precision = precision_score(test_y, y_pred, average='micro')
-            # print(test_y,y_pred)
-            print(self.model_name," 预测的精度是：",self.precision)
-            # print(self.model_name," 模型评价结果是：")
-            # print(classification_report(test_y, y_pred))
             return self.precision
         except Exception as e:
             raise e

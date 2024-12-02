@@ -3,9 +3,10 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QLabel, QLineEdit
     QApplication
 from PyQt5.QtCore import Qt
 
-from ui.others.ui_fun import BaseWindow
-from ui.qss import btn_css
+from ui.Base.baseWindow import BaseWindow
+from qss.qss import btn_css
 
+# 定义产品类型和物料类型
 products_types = ['I型', 'II型']
 material_types = ['A', 'B', 'C']
 material_nums = [[3, 5, 2]]
@@ -16,11 +17,19 @@ product_recipe = {
 }
 
 class OrderInventoryApp(BaseWindow):
+    """
+    订单物料统计系统主窗口类
+    继承自BaseWindow，提供产品配方配置、订单信息输入、库存信息输入和计算功能
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.initUI()
 
     def initUI(self):
+        """
+        初始化用户界面
+        包括布局管理、产品配方输入、订单信息输入、库存信息输入、计算按钮和结果显示等部分
+        """
         self.setWindowTitle("订单物料统计系统")
 
         # 布局管理
@@ -46,7 +55,6 @@ class OrderInventoryApp(BaseWindow):
                 quantity = product_recipe.get(product, {}).get(part, 0)
                 item = QTableWidgetItem(str(quantity))
                 self.recipe_table.setItem(i, j, item)
-
 
         # 调整列宽和行高
         header = self.recipe_table.horizontalHeader()
@@ -173,6 +181,10 @@ class OrderInventoryApp(BaseWindow):
         self.setLayout(layout)
 
     def add_product(self):
+        """
+        添加产品型号
+        弹出对话框让用户输入新的产品型号，并更新产品配方和相关UI
+        """
         text, ok = QInputDialog.getText(self, '添加产品型号', '请输入新的产品型号:')
         if ok and text:
             if text not in products_types:
@@ -183,6 +195,10 @@ class OrderInventoryApp(BaseWindow):
                 self.update_inventory_form()
 
     def delete_product(self):
+        """
+        删除产品型号
+        弹出对话框让用户选择要删除的产品型号，并更新产品配方和相关UI
+        """
         items, ok = QInputDialog.getItem(self, '删除产品型号', '请选择要删除的产品型号:', products_types, 0, False)
         if ok and items:
             products_types.remove(items)
@@ -191,6 +207,10 @@ class OrderInventoryApp(BaseWindow):
             self.update_order_form()
 
     def add_material(self):
+        """
+        添加物料类型
+        弹出对话框让用户输入新的物料类型，并更新产品配方和相关UI
+        """
         text, ok = QInputDialog.getText(self, '添加物料类型', '请输入新的物料类型:')
         if ok and text:
             if text not in material_types:
@@ -201,6 +221,10 @@ class OrderInventoryApp(BaseWindow):
                 self.update_inventory_form()
 
     def delete_material(self):
+        """
+        删除物料类型
+        弹出对话框让用户选择要删除的物料类型，并更新产品配方和相关UI
+        """
         items, ok = QInputDialog.getItem(self, '删除物料类型', '请选择要删除的物料类型:', material_types, 0, False)
         if ok and items:
             material_types.remove(items)
@@ -210,6 +234,10 @@ class OrderInventoryApp(BaseWindow):
             self.update_inventory_form()
 
     def update_table(self):
+        """
+        更新产品配方表格
+        根据产品类型和物料类型的变更，更新表格的行列数和数据
+        """
         self.recipe_table.setColumnCount(len(material_types))
         self.recipe_table.setHorizontalHeaderLabels(material_types)
         self.recipe_table.setRowCount(len(products_types))
@@ -222,6 +250,10 @@ class OrderInventoryApp(BaseWindow):
                 self.recipe_table.setItem(i, j, item)
 
     def update_order_form(self):
+        """
+        更新订单信息输入表单
+        根据产品类型的变更，更新订单信息输入表单的行数和标签
+        """
         # 清除旧的订单信息输入
         while self.order_form.count():
             item = self.order_form.takeAt(0)
@@ -238,6 +270,10 @@ class OrderInventoryApp(BaseWindow):
             self.order_entries[product] = entry
 
     def update_inventory_form(self):
+        """
+        更新库存信息输入表单
+        根据物料类型的变更，更新库存信息输入表单的行数和标签
+        """
         # 清除旧的库存信息输入
         while self.inventory_form.count():
             item = self.inventory_form.takeAt(0)
@@ -254,6 +290,10 @@ class OrderInventoryApp(BaseWindow):
             self.inventory_entries[part] = entry
 
     def update_recipe(self):
+        """
+        更新产品配方
+        根据用户在表格中输入的数据，更新全局的产品配方，并重新计算所需零件数量和库存
+        """
         # 获取用户输入的配方信息
         updated_recipe = {}
         for i in range(self.recipe_table.rowCount()):

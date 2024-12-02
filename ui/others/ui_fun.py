@@ -1,19 +1,14 @@
 import datetime
-import json
-import logging
 
 import numpy as np
-import pandas as pd
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from matplotlib import pyplot as plt
 # from matplotlib.backends.backend_template import FigureCanvas
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 import config
-from utils.my_thread import NewMyThread, MyThread
 
 w = 1200
 h = 800
@@ -53,261 +48,6 @@ class MyFigure(FigureCanvas):
         self.axes.plot(t, s)
 
 
-class BaseWindow(QWidget):
-    '''基类窗口'''
-    _single_update_ui = pyqtSignal()
-    _single_import_table = pyqtSignal(tuple)
-    _single_import_table_db = pyqtSignal(tuple)
-    def __init__(self,parent=None):
-        super(BaseWindow, self).__init__(parent)
-        self.parent = parent
-        self.table_style = """
-            QTableWidget {
-                alternate-background-color: rgba(219, 219, 225, 0.8);
-                background-color: white;
-                border-radius: 5px;
-            }
-            QTableWidget::item:selected {
-                color: #FFFFFF;
-                background-color: #131E2F;
-            }
-            QHeaderView::section {
-                border: 0px;
-                height: 40px;
-                width: 28px;
-                color: rgb(253, 253, 253);
-                background-color: rgb(56, 61, 93);
-                font: 14px "微软雅黑";
-            }
-        """
-        self.thread = None
-        self.sensors = config.get_sensors()
-        self._single_update_ui.connect(self.update_ui)
-        self._single_import_table.connect(self.import_table_thread)
-
-        self._single_import_table_db.connect(self.db_to_table_thread)
-    def update_ui(self):
-        pass
-
-    def show_message(self,text):
-        QMessageBox.critical(self, "错误", text)
-
-    def check_file_size(self, filenames):
-        '''检查文件大小是否小于30行'''
-        for filename in filenames:
-            try:
-                with open(filename, 'r', encoding='utf-8') as file:
-                    total = sum(1 for line in file)
-                    if total < 30:
-                        raise Exception(f'文件行数不足,{filename} 中只有 {total} 行的数据，请至少采集 30 行数据')
-            except Exception as e:
-                raise e
-        return True
-
-    def init_table(self,table):
-        # 初始化表格内容为0
-        for row in range(table.rowCount()):
-            for col in range(table.columnCount()):
-                item = QTableWidgetItem('0')
-                item.setTextAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
-                table.setItem(row, col, item)
-
-    # 辅助函数：安全调用槽函数
-    def safe_call(self, func,text):
-        try:
-            self.threadFun = ['开始预测','保存配置','导入表格']
-            if self.parent:
-                if self.parent.IsRun:
-                    QMessageBox.warning(self, "警告", "有任务运行中!")
-                    return
-                else:
-                    self.parent.setRun(text)
-            func()
-        except Exception as e:
-            print(f"Error in {func.__name__}: {e}")
-            QMessageBox.warning(self, "错误", f"{e}")
-            if self.parent and text not in self.threadFun:
-                self.parent.setRun()
-        else:
-            if self.parent and text not in self.threadFun:
-                self.parent.setRun()
-    ''''''''''''''''''''''''
-    def import_table(self):
-        self.Is_import = True
-        options = QFileDialog.Options()
-        options |= QFileDialog.DontUseNativeDialog
-        file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(self, "选择文件", "", "CSV Files (*.csv);;Excel Files (*.xlsx)",options=options)
-
-        if not file_path:
-            self.parent.setRun()
-            return
-
-        # 读取文件
-        if file_path.endswith('.csv'):
-            df = pd.read_csv(file_path)
-        elif file_path.endswith('.xlsx'):
-            df = pd.read_excel(file_path)
-        else:
-            QMessageBox.warning(self, "错误", "不支持的文件类型")
-            self.parent.setRun()
-            return
-
-        # 获取当前标签页的表格
-        current_tab = self.tab_widget.currentWidget()
-        if not current_tab:
-            QMessageBox.warning(self, "错误", "没有选中的标签页")
-            self.parent.setRun()
-            return
-
-        table = current_tab.findChild(QTableWidget)
-        if not table:
-            QMessageBox.warning(self, "错误", "没有找到表格")
-            self.parent.setRun()
-            return
-
-        # 获取表格的列名
-        headers = [table.horizontalHeaderItem(col).text() for col in range(table.columnCount())]
-
-        # 分块读取文件
-        self.chunk_size = 300  # 每次读取的行数
-
-        if file_path.endswith('.csv'):
-            reader = pd.read_csv(file_path, chunksize=self.chunk_size)
-        elif file_path.endswith('.xlsx'):
-            reader = pd.read_excel(file_path, chunksize=self.chunk_size)
-        else:
-            QMessageBox.warning(self, "错误", "不支持的文件类型")
-            self.parent.setRun()
-            return
-        row_index = table.rowCount()
-        self.reader_nums = 0
-        self.add_nums = 0
-        chunks = []
-        for chunk in reader:
-            chunks.append(chunk)
-            # 处理时间列
-            if 'Time' in chunk.columns:
-                chunk['Time'] = pd.to_datetime(chunk['Time'], errors='coerce')
-                chunk['Time'] = chunk['Time'].dt.strftime("%Y-%m-%d %H:%M:%S")
-                chunk['Time'] = chunk['Time'].fillna('')
-
-            # 导入数据
-            for _, row in chunk.iterrows():
-                row_data = []
-                for header in headers[:-3]:  # 排除最后三列
-                    if header in row:
-                        row_data.append(str(row[header]))
-                    # else:
-                    #     row_data.append('')
-                if not row_data:
-                    continue
-
-                # 添加新行
-                table.insertRow(row_index)
-                table.setRowHeight(row_index, 40)
-            self.reader_nums = self.reader_nums + self.chunk_size
-        for chunk in chunks:
-            # 预测
-            self._single_import_table.emit((chunk,headers,table,row_index))
-            # thread = MyThread(lambda: self.import_table_thread((chunk, headers, table, row_index))).start()
-            # thread = NewMyThread(lambda : self.import_table_thread(chunk,headers,table,row_index)).start()
-            # self.thread._signal.connect(self.theard_finished_import)
-            # thread.start()
-            row_index = row_index + self.chunk_size
-    def import_table_thread(self,s):
-        try:
-            chunk, headers, table, row_index = s
-            # 处理时间列
-            if 'Time' in chunk.columns:
-                chunk['Time'] = pd.to_datetime(chunk['Time'], errors='coerce')
-                chunk['Time'] = chunk['Time'].dt.strftime("%Y-%m-%d %H:%M:%S")
-                chunk['Time'] = chunk['Time'].fillna('')
-
-            # 导入数据
-            for _, row in chunk.iterrows():
-                row_data = []
-                for header in headers[:-3]:  # 排除最后三列
-                    if header in row:
-                        row_data.append(str(row[header]))
-                    # else:
-                    #     row_data.append('')
-                if not row_data:
-                    continue
-                #
-                # # 添加新行
-                # table.insertRow(row_index)
-                # table.setRowHeight(row_index, 40)
-
-                # 填充参数值
-                for column, value in enumerate(row_data):
-                    item = QTableWidgetItem(value)
-                    item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row_index, column, item)
-
-                # 添加时间列
-                if 'Time' in row:
-                    time_value = str(row['Time'])
-                    item = QTableWidgetItem(time_value)
-                    item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row_index, table.columnCount() - 3, item)
-
-                # 添加编辑和删除按钮
-                self.add_edit_button(table, row_index)
-                self.add_delete_button(table, row_index)
-
-                row_index = row_index + 1
-
-        finally:
-            self.add_nums = self.add_nums + self.chunk_size
-            print(self.add_nums,self.reader_nums)
-            if self.add_nums >= self.reader_nums:
-                self.parent.setRun()
-    def db_to_table_thread(self,s):
-        try:
-            batch,table = s
-            for row_data in batch:
-                update_time = row_data['update_time']
-                params = json.loads(row_data['params'])
-
-                row_index = table.rowCount()
-                table.insertRow(row_index)
-                table.setRowHeight(row_index, 40)
-
-                # 填充数据
-                for column, param_name in enumerate(
-                        table.horizontalHeaderItem(j).text() for j in range(table.columnCount() - 3)):
-                    value = params.get(param_name, "")
-                    item = QTableWidgetItem(str(value))
-                    item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row_index, column, item)
-
-                # 填充更新时间
-                item = QTableWidgetItem(update_time.strftime(config.time_format))
-                item.setTextAlignment(Qt.AlignCenter)
-                table.setItem(row_index, table.columnCount() - 3, item)
-
-                # 添加编辑和删除按钮
-                self.add_edit_button(table, row_index)
-                self.add_delete_button(table, row_index)
-        finally:
-
-            self.batch_num = self.batch_num + self.load_batch_size
-            print(self.batch_num,self.filtered_data)
-            if self.batch_num >=  len(self.filtered_data):
-                self.parent.setRun()
-    # def theard_finished_import(self,e):
-    #     try:
-    #         if not self.Is_import:
-    #             return
-    #         print(self.add_nums , self.reader_nums)
-    #         if self.add_nums >= self.reader_nums:
-    #             self.parent.setRun()
-    #             self.Is_import = False
-    #             if e != 'OK':
-    #                 QMessageBox.critical(self, '错误', f'模型预测失败: {str(e)}')
-    #     except Exception as e:
-    #         print(e)
 class MyLabel(QLabel):
     # 自定义信号，在文本改变时发射
     textChanged = pyqtSignal()
@@ -500,7 +240,10 @@ class TableWidgetWithAverages(QTableWidget):
     def __init__(self, parent=None):
         """参数表格"""
         super().__init__(parent)
-        self.name_list = ["平均值", "最大值", "最小值"]
+
+
+    def init_averages_table(self,name_list=["平均值", "最大值", "最小值"]):
+        self.name_list = name_list
         self.heiRowNum = len(self.name_list)
         for i in range(self.heiRowNum):
             name = self.name_list[i]
@@ -577,6 +320,8 @@ class TableWidgetWithAverages(QTableWidget):
         return averages, max_values, min_values
 
     def refresh_table(self):
+        if self.heiRowNum <=0:
+            return
         # 计算平均值、最大值和最小值
         averages, max_values, min_values = self.calculate_average_max_min()
         # 显示平均值、最大值和最小值

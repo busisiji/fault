@@ -1,25 +1,16 @@
-import csv
-import fnmatch
-import json
 import os
 import datetime
 
-import joblib
-import pandas as pd
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QFont, QDoubleValidator, QColor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
-    QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QMessageBox, QHeaderView, QComboBox, QAbstractItemView, QFileDialog, QDialog, QLineEdit, QToolTip, QTabWidget
+    QTableWidget, QTableWidgetItem, QGroupBox, QMessageBox, QHeaderView, QAbstractItemView, QFileDialog, QDialog, QLineEdit, QToolTip, QTabWidget
 from PyQt5.QtCore import Qt, QSize, pyqtSignal
 
 import config
-from db.db_mysql import DB_MySQL
-from lib.faultDiagnosis_model import faultDiagnosisModel
-from ui.qss import btn_css
-from ui.others.ui_fun import BaseWindow, TableWidgetWithAverages, SwitchButton
-from ui.ui_dataCollectionAllWindow import prompt_overwrite
-from utils.frozen_dir import validate_directory, exists_path
-from utils.my_thread import NewMyThread
+from ui.others.ui_fun import TableWidgetWithAverages
+from qss.qss import btn_css
+from ui.Base.baseWindow import BaseWindow
 
 
 class PredictWindow(BaseWindow):
@@ -153,7 +144,8 @@ class PredictWindow(BaseWindow):
         param_names = sensor['param_name']
         status_list = sensor['status_list']
 
-        table = QTableWidget()
+        table = TableWidgetWithAverages()
+        table.init_averages_table([])
         self.tRN = 0
         table.setColumnCount(len(param_names) +self.tCN)  # 增加三列用于编辑、删除按钮和更新时间
         table.setHorizontalHeaderLabels(param_names + ['预测结果','更新时间', '编辑', '删除'])
@@ -638,136 +630,58 @@ class PredictWindow(BaseWindow):
             self.save_path_lineedit.setText(directory)
 
 
-    def export_table(self):
-        # 获取当前选中的表格
-        current_tab = self.tab_widget.currentWidget()
-        sensor_name = self.tab_widget.tabText(self.tab_widget.currentIndex())
-        if not current_tab:
-            QMessageBox.warning(self, "警告", "没有选中的表格")
-            return
 
-        table = current_tab.findChild(QTableWidget)
-        if not table:
-            QMessageBox.warning(self, "警告", "当前标签页中没有表格")
-            return
+    def update_ui(self):
+        # 获取最新的传感器信息
+        old_sensors = self.sensors
+        new_sensors = config.get_sensors()
+        self.sensors = new_sensors
 
-        # 获取表格数据
-        data = []
-        for row in range(table.rowCount()):
-            row_data = []
-            for col in range(table.columnCount() - 2):  # 跳过最后两列
-                item = table.item(row, col)
-                if item:
-                    row_data.append(item.text())
-                else:
-                    row_data.append("")  # 如果单元格为空，则添加空字符串
-            data.append(row_data)
+        # 提取旧的和新的传感器名称
+        old_sensor_names = {sensor['sensor_name'] for sensor in old_sensors}
+        new_sensor_names = {sensor['sensor_name'] for sensor in new_sensors}
 
-        # 获取列名
-        headers = []
-        for col in range(table.columnCount() - 2):  # 跳过最后两列
-            headers.append(table.horizontalHeaderItem(col).text())
+        # 找出新增的传感器和删除的传感器
+        added_sensors = new_sensor_names - old_sensor_names
+        removed_sensors = old_sensor_names - new_sensor_names
 
-        # 创建 DataFrame
-        df = pd.DataFrame(data, columns=headers)
+        # 删除不再存在的传感器表格
+        for i in range(self.tab_widget.count() - 1, -1, -1):
+            tab = self.tab_widget.widget(i)
+            table = tab.findChild(QTableWidget)
+            if table and table.objectName() in removed_sensors:
+                self.tab_widget.removeTab(i)
 
-        # 选择保存目录
-        directory = QFileDialog.getExistingDirectory(self, "选择保存目录")
-        if not directory:
-            return
+        # 添加新的传感器表格
+        for sensor_name in added_sensors:
+            sensor = self.get_sensor_by_name(sensor_name)
+            if sensor:
+                widget = self.add_table(sensor)
+                self.tab_widget.addTab(widget, sensor_name)
 
-        exists_path(os.path.join(directory, sensor_name))
-        # 构建完整的文件路径
-        file_path = os.path.join(directory, sensor_name,'预测结果.xlsx')
+        # 更新现有传感器表格的列
+        for i in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(i)
+            table = tab.findChild(QTableWidget)
+            if table:
+                sensor_name = table.objectName()
+                sensor = self.get_sensor_by_name(sensor_name)
+                if sensor:
+                    new_headers = sensor['param_name']
+                    new_headers.extend(table.horizontalHeaderItem(col).text() for col in
+                                       range(table.columnCount() - 4, table.columnCount()))
 
-        # 将 DataFrame 写入 XLSX 文件
-        try:
+                    # 获取当前表格的列名
+                    current_headers = [table.horizontalHeaderItem(col).text() for col in range(table.columnCount())]
 
-            df.to_excel(file_path, index=False)
-            QMessageBox.information(self, "提示", "数据已成功导出到 {}".format(file_path))
-        except Exception as e:
-            QMessageBox.critical(self, "错误", "导出数据时发生错误：{}".format(str(e)))
+                    # 删除不再存在的列
+                    for col in range(table.columnCount() - 1, -1, -1):
+                        if table.horizontalHeaderItem(col).text() not in new_headers:
+                            table.removeColumn(col)
 
-    def start_prediction(self):
-        model_directory = self.save_path_lineedit.text()
-
-        # 获取当前选中的传感器标签页
-        current_tab = self.tab_widget.currentWidget()
-        if current_tab:
-            self.table = current_tab.findChild(QTableWidget)
-            sensor_name = self.tab_widget.tabText(self.tab_widget.currentIndex())
-
-            # 加载模型
-            model_path = os.path.join(model_directory, sensor_name)
-            if not os.path.exists(model_path):
-                QMessageBox.warning(self, "警告", f"模型目录 {model_path} 不存在")
-                self.parent.setRun()
-                return
-
-
-            # 初始化故障诊断模型
-            self.parent.fualt_model.load_train_info(model_path)
-
-
-            # 加载的模型
-            self.parent.fualt_model.load_models(model_path)
-            if not self.parent.fualt_model.Models:
-                self.parent.setRun()
-                QMessageBox.warning(self, "警告", "没有加载模型")
-                return
-
-            # 获取表头
-            headers = [self.table.horizontalHeaderItem(col).text() for col in range(self.table.columnCount() - self.tCN)]
-
-            # 获取数据
-            data = []
-            for row in range(self.tRN, self.table.rowCount()):
-                row_data = {}
-                for col in range(self.table.columnCount() - self.tCN):  # 排除编辑、删除按钮和更新时间列
-                    item = self.table.item(row, col)
-                    if item:
-                        row_data[headers[col]] = float(item.text())
-                if row_data:
-                    data.append(row_data)
-
-            if not data:
-                QMessageBox.warning(self, "警告", "表格中没有数据")
-                self.parent.setRun()
-                return
-
-            # 过滤数据，只保留 训练 列的数据
-            filtered_data = []
-            for row_data in data:
-                filtered_row = [row_data.get(feature, None) for feature in self.parent.fualt_model.use_features]
-                if all(x is not None and x != '' for x in filtered_row):  # 确保没有空值或空字符串，允许 0.0 存在
-                    filtered_data.append(filtered_row)
-
-            if not filtered_data:
-                QMessageBox.warning(self, "警告", "没有有效的数据用于预测")
-                self.parent.setRun()
-                return
-
-            # 预测
-            self.thread = NewMyThread(lambda: self.parent.fualt_model.predict_models(filtered_data))
-            self.thread._signal.connect(self.theard_finished)
-            self.thread.start()
-
-    def theard_finished(self,e):
-        try:
-            preds = self.thread.get_result()
-            predictions = [pred[3] for pred in preds]
-            Allpredictions = [pred[2] for pred in preds]
-            # 添加预测结果行
-            for j, pred in enumerate(predictions):
-                item = QTableWidgetItem(str(pred))
-                item.setTextAlignment(Qt.AlignCenter)
-                item.setToolTip(str(Allpredictions[j]))  # 设置单元格的提示信息
-                self.table.setItem(j + self.tRN, self.table.columnCount() - self.tCN, item)
-
-            if e != 'OK':
-                QMessageBox.critical(self, '错误', f'模型预测失败: {str(e)}')
-        except Exception as e:
-            print(e)
-        finally:
-            self.parent.setRun()
-
+                    # 添加新列
+                    for header in new_headers:
+                        if header not in current_headers:
+                            table.insertColumn(table.columnCount() - 4)  # 在倒数第4列之前插入新列
+                            item = QTableWidgetItem(header)
+                            table.setHorizontalHeaderItem(table.columnCount() - 4 - 1, item)  # 设置新列的标题

@@ -7,8 +7,10 @@ from matplotlib import pyplot as plt
 from matplotlib.font_manager import FontProperties
 
 import config
-from ui.qss import btn_css
-from ui.others.ui_fun import BaseWindow, MyFigure
+from qss.qss import btn_css
+from ui.others.ui_fun import MyFigure
+from ui.Base.baseWindow import BaseWindow
+
 
 class Data3DWindow(BaseWindow):
     '''3D数据图参数选择窗口'''

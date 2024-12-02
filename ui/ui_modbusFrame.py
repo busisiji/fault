@@ -3,11 +3,11 @@ import struct
 import sys
 import re
 from PyQt5 import QtWidgets, QtCore, QtGui
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.sync import ModbusTcpClient
 
 import config
 from db.db_mysql import DB_MySQL
-from ui.qss import btn_css
+from qss.qss import btn_css
 
 
 class ModbusTCPWorker(QtCore.QObject):
@@ -85,9 +85,8 @@ class ModbusTCPWorker(QtCore.QObject):
         self.read_results.emit(sensor_name,status_list, results)
     def convert_data(self, value, data_type):
         if data_type == 'uint16':
-            value = 65525
             if value >= 32768:
-                value = value - 65536
+                value -= 65536
             return value
         elif data_type == 'uint32':
             return (value[0] << 16) | value[1]

@@ -8,7 +8,8 @@ from PyQt5.QtCore import Qt, QSize
 from matplotlib import pyplot as plt
 
 import config
-from ui.others.ui_fun import BaseWindow, MyFigure
+from ui.others.ui_fun import MyFigure
+from ui.Base.baseWindow import BaseWindow
 
 
 class MachineLearningWindow(BaseWindow):

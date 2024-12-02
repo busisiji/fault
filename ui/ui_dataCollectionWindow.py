@@ -10,8 +10,8 @@ from PyQt5.QtCore import Qt, QSize
 from matplotlib import pyplot as plt
 
 import config
-from ui.qss import btn_css
-from ui.others.ui_fun import BaseWindow
+from qss.qss import btn_css
+from ui.Base.baseWindow import BaseWindow
 from utils.collect import get_new_data
 from utils.mongo import start_draw_final
 

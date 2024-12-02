@@ -1,5 +1,5 @@
 # coding: utf-8
-import re
+import os.path
 import sys
 
 from PyQt5.QtGui import *
@@ -16,7 +16,7 @@ from ui.ui_calulateWindow import OrderInventoryApp
 from ui.ui_configWindow import ConfigWindow
 from ui.ui_predictWindow import PredictWindow
 from ui.ui_sensorWindow import SensorWindow
-from ui.qss import btn_css, stylesheet
+from qss.qss import btn_css, stylesheet
 from ui.ui_data2DWindow import Data2DWindow
 from ui.ui_data3DWindow import Data3DWindow
 from ui.ui_dataCollectionAllWindow import DataCollectionAllWindow
@@ -27,6 +27,7 @@ from ui.others.ui_led import MyLed
 from ui.ui_modbusFrame import ModbusTCPFrame
 from ui.ui_start import MySplashScreen, Form
 from ui.ui_trainWindow import TrainWindow
+from ui.ui_warningMessageWindow import WarningMessageWindow
 # from ui.ui_warningMessageWindow import WarningMessageWindow
 from utils.data_load import check_and_create_csv_files
 
@@ -35,11 +36,9 @@ class MainWindow(QMainWindow):
     _single_update_ui = pyqtSignal()
     _single_update_led = pyqtSignal(bool)
     def __init__(self):
-        super().__init__()
-        self.resize(config.main_weight, config.main_height)  # 设置窗口大小
+        super().__init__(flags=Qt.Window | Qt.WindowCloseButtonHint | Qt.WindowMinimizeButtonHint)
+        # self.resize(config.main_weight, config.main_height)  # 设置窗口大小
         self.setWindowIcon(QIcon(config.ROOT_DIR + '/icons/1.ico'))
-        # 设置固定高度
-        self.setFixedHeight( QApplication.desktop().screenGeometry().height())
 
         # 初始化操作
         # 创建数据集
@@ -55,7 +54,22 @@ class MainWindow(QMainWindow):
         self.IsOnlyUse2 = True
 
         self.initUI()
+
+        # 设置窗口的大小，并确保不超过屏幕的分辨率
+        # screen = QApplication.desktop().screenGeometry()
+        # width = min(config.main_weight, screen.width())
+        # height = min(config.main_height, screen.height())
+        # self.resize(width, height)
+        self.setMaximumHeight(QApplication.desktop().screenGeometry().height()-50)
+        # # 设置固定高度
+        self.setFixedHeight( QApplication.desktop().screenGeometry().height()-50)
         self.center()
+        # 设置窗口为全屏
+        # self.setWindowState(Qt.WindowFullScreen)
+        # 禁用最小化、最大化和关闭按钮
+        # self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint)
+        # 禁用最大化按钮
+        # self.setWindowFlags(self.windowFlags() & ~Qt.WindowMaximizeButtonHint)
 
         self.timer_sensors_num = 0 # 采集时间
         self.timer_sensors = QtCore.QTimer(self)
@@ -76,7 +90,7 @@ class MainWindow(QMainWindow):
 
         # 添加菜单项
         menu_items1 = [
-            ('集成学习', config.ROOT_DIR + '/icons/集成.png'),
+            ('集成学习', config.ROOT_DIR + '/icons/ensemble.png'),
             ('2D 数据图', config.ROOT_DIR + '/icons/2D.png'),
             ('3D 数据图', config.ROOT_DIR + '/icons/3D.png'),
             ('数据采集', config.ROOT_DIR + '/icons/数据采集.png'),
@@ -89,14 +103,14 @@ class MainWindow(QMainWindow):
             3: 4,  # dataCollectionWindow
         }
         menu_items2 = [
-            ('传感器配置', config.ROOT_DIR + '/icons/传感器.png'),
+            ('传感器配置', config.ROOT_DIR + '/icons/sensor.png'),
             # ('通讯助手', config.ROOT_DIR + '/icons/通讯.png'),
-            ('图表显示', config.ROOT_DIR + '/icons/数据视图.png'),
-            ('数据运维', config.ROOT_DIR + '/icons/数据采集.png'),
-            ('模型训练', config.ROOT_DIR + '/icons/机器学习.png'),
-            ('模型预测', config.ROOT_DIR + '/icons/集成.png'),
-            ('历史报警', config.ROOT_DIR + '/icons/条型图.png'),
-            ('物料统计', config.ROOT_DIR + '/icons/数据统计.png'),
+            ('图表显示', config.ROOT_DIR + '/icons/show.png'),
+            ('数据运维', config.ROOT_DIR + '/icons/collect.png'),
+            ('模型训练', config.ROOT_DIR + '/icons/maLearn.png'),
+            ('模型预测', config.ROOT_DIR + '/icons/predict.png'),
+            ('历史报警', config.ROOT_DIR + '/icons/warning.png'),
+            ('物料统计', config.ROOT_DIR + '/icons/calulate.png'),
         ]
         self.switcher_2 = {
             0: 0,
@@ -105,8 +119,8 @@ class MainWindow(QMainWindow):
             2: 5,  # dataCollectionAllWindow
             3: 8,  # trainWindow
             4: 9,  # predictWindow
-            5: 10,
-            #6:11, # warningMessageWindow
+            5: 10, #
+            6:11, # warningMessageWindow
         }
 
         for text, icon_path in menu_items1:
@@ -140,11 +154,11 @@ class MainWindow(QMainWindow):
         self.serialWindow = SensorWindow(self)
         self.predictWindow = PredictWindow(self)
         self.orderInventoryApp = OrderInventoryApp(self)
-        #         self.warningMessageWindow = WarningMessageWindow(self)
+        self.warningMessageWindow = WarningMessageWindow(self)
 
         self.pages = [self.configWindow, ensembleWindow, data2DWindow, data3DWindow, dataCollectionWindow,
                       self.dataCollectionAllWindow, self.foldLineWindow, self.serialWindow, self.trainWindow,
-                      self.predictWindow,self.orderInventoryApp]
+                      self.predictWindow,self.orderInventoryApp,self.warningMessageWindow]
 
         # 将子界面添加到堆叠窗口
         for page in self.pages:
@@ -349,6 +363,10 @@ class MainWindow(QMainWindow):
             self.IsRun = True
             self.new_led.setChecked(True)
             self.new_label.setText(IsRun)
+            QApplication.processEvents()  # 强制处理事件
+            # self.groupbox_new.update()
+            # self.new_led.update()  # 强制更新
+            # self.new_label.update()  # 强制更新
         else:
             self.new_led.setChecked(False)
             self.new_label.setText('无任务')
@@ -388,18 +406,19 @@ class MainWindow(QMainWindow):
 
     def update_ui(self):
         """更新界面"""
-        try:
-            # 重新加载传感器状态
-            self._single_update_led.emit(True)
+        # try:
+        # 重新加载传感器状态
+        self._single_update_led.emit(True)
 
-            indices = list(self.switcher_2.values())
-            # 使用列表推导式提取指定索引的元素
-            pages = [self.pages[i] for i in indices]
-            for page in pages:
-                page._single_update_ui.emit()
-        finally:
-            # 更新完成
-             self.setRun()
+        indices = list(self.switcher_2.values())
+        # 使用列表推导式提取指定索引的元素
+        pages = [self.pages[i] for i in indices]
+        for page in pages:
+            page._single_update_ui.emit()
+        # finally:
+        #     # 更新完成
+        #      self.setRun()
+
 
 
 class QSSLoader:

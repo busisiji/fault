@@ -6,8 +6,6 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-
 # -*- coding: utf-8 -*-
 
 # Form implementation generated from reading ui file 'demo_1.ui'
@@ -16,9 +14,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
-from ui.qss import btn_css
+from qss.qss import btn_css
 
 
 class Ui_Form(object):

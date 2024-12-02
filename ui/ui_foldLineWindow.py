@@ -1,19 +1,13 @@
-import datetime
-import logging
 import random
 import sys
-import time
 
 import matplotlib.pyplot as plt
-from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.uic.properties import QtCore
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FC
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal
+from PyQt5.QtCore import pyqtSignal
 import matplotlib.dates as mdates  # 导入 matplotlib.dates 模块
 import config
-from ui.others.ui_fun import BaseWindow, SwitchButton
-from ui.qss import btn_css
+from ui.Base.baseWindow import BaseWindow
 from utils.my_thread import DataProcessingThread
 
 
@@ -87,9 +81,9 @@ class SensorPage(QWidget):
         for param in self.params:
             checkbox = QCheckBox(param)
             combobox = QComboBox()
-            combobox.addItems([f'图表 {i}' for i in range(self.figure_num)])
+            combobox.addItems([f'图表 {i+1}' for i in range(self.figure_num)])
             combobox.currentIndexChanged.connect(lambda index, p=param: self.set_param_position(p, index))
-            checkbox.stateChanged.connect(lambda state, p=param: self.update_plots())
+            checkbox.stateChanged.connect(lambda state, p=param: self.update_checkbox(p))
             self.param_layout.addItem(self.spacer, row, column)
             self.param_layout.addWidget(checkbox, row, column + 1)
             self.param_layout.addWidget(combobox, row, column + 2)
@@ -107,31 +101,6 @@ class SensorPage(QWidget):
         self.current_page = 0
 
         self.page_buttons = QHBoxLayout()
-        # 创建标签和开关按钮
-        # auto_collect_label = QLabel('显示数据')
-        # auto_collect_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        # self.auto_collect_switch = SwitchButton()
-        # # 将标签和time按钮添加到 top_layout 中
-        # self.page_buttons.addWidget(auto_collect_label)
-        # self.page_buttons.addWidget(self.auto_collect_switch)
-        # spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # self.page_buttons.addItem(spacer)
-        # self.prev_button = QPushButton('上一页')
-        # self.next_button = QPushButton('下一页')
-        # btn_css(self.prev_button)
-        # btn_css(self.next_button)
-        # self.page_label = QLabel("1 / 1")
-        # spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # self.page_buttons.addItem(spacer)
-        # self.page_buttons.addWidget(self.prev_button)
-        # self.page_buttons.addItem(spacer)
-        # self.page_buttons.addWidget(self.page_label)
-        # self.page_buttons.addItem(spacer)
-        # self.page_buttons.addWidget(self.next_button)
-        # self.page_buttons.addItem(spacer)
-
-        # self.prev_button.clicked.connect(self.prev_page)
-        # self.next_button.clicked.connect(self.next_page)
 
         main_layout = QVBoxLayout()
         main_layout.addLayout(self.param_layout)
@@ -141,9 +110,44 @@ class SensorPage(QWidget):
 
         self.update_plots()
 
-    def set_param_position(self, param, position):
-        self.param_positions[param] = position
-        self.update_plots()
+
+    def set_param_position(self, param, index):
+        self.param_positions[param] = index
+        if param in self.param_checkboxes and self.param_checkboxes[param].isChecked():
+
+            self.param_comboboxes[param].previousParam = param
+            previousParam = self.param_comboboxes[param].previousParam
+            line = self.lines.get(previousParam)
+            # 删除旧线
+            if line:
+                line.remove()
+            # 添加新线
+            ax = self.axes.get(index)
+            line_num = list(self.lines.values()).index(line) if line not in self.lines else len(self.lines)
+            line, = ax.plot([], [], label=param, color=f'C{line_num % 10}')
+            self.lines[param] = line
+            # line = self.lines.get(param)
+            # ax.add_line(line)
+
+            self.param_comboboxes[param].previousParam = param
+
+    def update_checkbox(self, param):
+        if param in self.param_checkboxes and self.param_checkboxes[param].isChecked():
+            plot_index = self.param_positions[param]
+            if plot_index in self.axes:
+                ax = self.axes[plot_index]
+                if param not in self.lines:
+                    # 使用 matplotlib 的颜色循环功能
+                    line, = ax.plot([], [], label=param, color=f'C{len(self.lines) % 10}')
+                    self.lines[param] = line
+                else:
+                    line = self.lines[param]
+                    line.set_label(param)
+                    line.set_color(f'C{list(self.lines).index(param)}')
+
+            self.param_comboboxes[param].previousParam = param
+
+
 
     def update_plots(self):
         if not self.axes:
@@ -158,64 +162,14 @@ class SensorPage(QWidget):
                 ax.set_ylabel('值')
                 self.axes[i] = ax
                 self.axes_x[i] = 0
-        start_index = self.current_page * 4
 
-        for param, position in self.param_positions.items():
-            if self.param_checkboxes[param].isChecked():
-                plot_index = position
-                if plot_index in self.axes:
-                    ax = self.axes[plot_index]
-                    ax.set_title(f'图表 {plot_index - start_index + 1}')
-                    if param not in self.lines:
-                        # 使用 matplotlib 的颜色循环功能
-                        line, = ax.plot([], [], label=param, color=f'C{len(self.lines) % 10}')
-                        # color = f'C{len(self.lines) % 10}'
-                        # line, = ax.plot([], [], label=param, color=color)
-                        self.lines[param] = line
-                    else:
-                        line = self.lines[param]
-                        line.set_label(param)
-                        line.set_color(f'C{list(self.lines).index(param)}')
-                    ax.legend()
-
-                    # 设置时间轴格式
-                    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-                    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+                ax.set_title(f'图表 {i - start_index + 1}')
+                ax.legend()
+                # 设置时间轴格式
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+                ax.xaxis.set_major_locator(mdates.AutoDateLocator())
 
         self.canvas.draw_idle()
-        # self.update_page_label()
-
-    # def update_data(self, param_names, results):
-    #     current_time = datetime.datetime.now()  # 获取当前时间
-    #     for param, value in zip(param_names, results):
-    #         try:
-    #             if self.param_checkboxes.get(param) and self.param_checkboxes[param].isChecked():
-    #                 try:
-    #                     param = config.convert_to_db_columns([param])[0]
-    #                 except Exception as e:
-    #                     logging.error(f"转换参数时发生错误: {e}")
-    #                     continue
-    #
-    #                 if value is not None:
-    #                     try:
-    #                         value = float(value)  # 将值转换为浮点数
-    #                     except ValueError as e:
-    #                         logging.error(f"转换值时发生错误: {e}")
-    #                         continue
-    #
-    #                     self.data[param].append(value)
-    #                     self.time_axis[param].append(current_time)
-    #                     if param in self.lines:
-    #                         positions = self.param_positions[param]
-    #                         if positions in self.axes:
-    #                             line = self.lines[param]
-    #                             line.set_data(self.time_axis[param], self.data[param])
-    #                             ax = self.axes[positions]
-    #                             ax.relim()
-    #                             ax.autoscale_view()
-    #         except Exception as e:
-    #             logging.error(f"处理数据时发生错误: {e}")
-    #     self.canvas.draw_idle()
     def update_data(self, param_names, results):
         self.thread = DataProcessingThread(
             param_names, results, self.param_checkboxes, self.lines, self.axes, self.param_positions, self.time_axis, self.data
@@ -229,26 +183,11 @@ class SensorPage(QWidget):
                 line = self.lines[param]
                 line.set_data(time_axis, data)
                 ax = self.axes[positions]
+                ax.legend()
                 ax.relim()
                 ax.autoscale_view()
-        self.canvas.draw_idle()
-
-    def prev_page(self):
-        if self.current_page > 0:
-            self.current_page -= 1
-            self.update_plots()
-
-    def next_page(self):
-        num_plots_per_page = 4
-        num_pages = (self.figure_num + num_plots_per_page - 1) // num_plots_per_page
-        if self.current_page < num_pages - 1:
-            self.current_page += 1
-            self.update_plots()
-
-    def update_page_label(self):
-        num_plots_per_page = 4
-        num_pages = (self.figure_num + num_plots_per_page - 1) // num_plots_per_page
-        self.page_label.setText(f"{self.current_page + 1} / {num_pages}")
+                # 只更新需要更新的部分
+                ax.figure.canvas.draw_idle()
 
     def add_param(self, param):
         self.data[param] = []
@@ -257,9 +196,9 @@ class SensorPage(QWidget):
 
         checkbox = QCheckBox(param)
         combobox = QComboBox()
-        combobox.addItems([f'图表 {i}' for i in range(self.figure_num)])
+        combobox.addItems([f'图表 {i+1}' for i in range(self.figure_num)])
         combobox.currentIndexChanged.connect(lambda index, p=param: self.set_param_position(p, index))
-        checkbox.stateChanged.connect(lambda state, p=param: self.update_plots())
+        checkbox.stateChanged.connect(lambda state, p=param: self.update_checkbox(p))
 
         self.add_param_widgets(checkbox, combobox)
 

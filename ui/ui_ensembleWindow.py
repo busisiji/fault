@@ -7,8 +7,9 @@ from PyQt5.QtWidgets import *
 
 import config
 from config import font
-from ui.qss import btn_css
-from ui.others.ui_fun import setQMessageBox, BaseWindow, MyLabel
+from qss.qss import btn_css
+from ui.others.ui_fun import setQMessageBox, MyLabel
+from ui.Base.baseWindow import BaseWindow
 from ui.others.ui_led import MyLed
 from utils.data_load import data_balance
 from utils.gettty import main

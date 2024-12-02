@@ -4,7 +4,7 @@ from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import pyqtSignal
 import config
 from db.db_mysql import DB_MySQL
-from ui.others.ui_fun import BaseWindow
+from ui.Base.baseWindow import BaseWindow
 
 
 class SensorWindow(BaseWindow):

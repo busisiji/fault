@@ -6,8 +6,9 @@ from matplotlib import pyplot as plt
 from matplotlib.font_manager import FontProperties
 
 import config
-from ui.qss import btn_css
-from ui.others.ui_fun import BaseWindow, MyFigure
+from qss.qss import btn_css
+from ui.others.ui_fun import MyFigure
+from ui.Base.baseWindow import BaseWindow
 
 
 class Data2DWindow(BaseWindow):

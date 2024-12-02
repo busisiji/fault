@@ -1,26 +1,19 @@
-import csv
-import fnmatch
-import json
 import os
 import datetime
 import sys
 
-import openpyxl
-import pandas as pd
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QFont, QDoubleValidator, QColor
+from PyQt5.QtGui import QFont, QDoubleValidator
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
     QTableWidget, QTableWidgetItem, QGroupBox, QSizePolicy, QMessageBox, QHeaderView, QComboBox, QAbstractItemView, \
-    QFileDialog, QDialog, QLineEdit, QToolTip, QTabWidget, QApplication, QSpacerItem, QScrollArea
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+    QDialog, QLineEdit, QToolTip, QTabWidget, QApplication, QSpacerItem, QScrollArea, QStackedWidget
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QSignalBlocker, QTimer
 
 import config
 from db.db_mysql import DB_MySQL
-from ui.qss import btn_css
-from ui.others.ui_fun import BaseWindow, TableWidgetWithAverages, SwitchButton
-from utils.frozen_dir import validate_directory, exists_path
-from utils.my_thread import NewMyThread
-from utils.utils import get_time_now
+from qss.qss import btn_css
+from ui.others.ui_fun import TableWidgetWithAverages, SwitchButton
+from ui.Base.baseWindow import BaseWindow
 
 
 def prompt_overwrite(file_path,mode):
@@ -56,7 +49,9 @@ class DataCollectionAllWindow(BaseWindow):
         self.fig = 0
         self.exit = 0
         self.tRN = 3 # 表格上面固定的行数 平均行、最大行、最小行
+        # 阙值控件
         self.threshold_inputs = {}
+        self.column_weigets = {}
         self.show_count = {}
         self.groupbox_threshold = {}
 
@@ -71,7 +66,7 @@ class DataCollectionAllWindow(BaseWindow):
         self.setLayout(self.mainVLayout)
 
         self._single_update_data.connect(self.update_data)
-        self._single_update_groupbox.connect(self.update_groupbox_threshold)
+        # self._single_update_groupbox.connect(self.update_groupbox_threshold)
 
     def setbox_1(self):
         # 容器1
@@ -166,29 +161,23 @@ class DataCollectionAllWindow(BaseWindow):
 
             # 将 QWidget 添加到标签页
             self.tab_widget.addTab(widget, sensor_name)
-    def add_table(self,sensor):
+
+    def add_table(self, sensor):
         # 创建表格
         sensor_name = sensor['sensor_name']
         param_names = sensor['param_name']
         status_list = sensor['status_list']
 
         table = TableWidgetWithAverages()
+        table.init_averages_table()
         self.tRN = table.heiRowNum
         table.setColumnCount(len(param_names) + 3)  # 增加三列用于编辑、删除按钮和更新时间
         table.setHorizontalHeaderLabels(param_names + ['更新时间', '编辑', '删除'])
-        # table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # 宽高自动分配
         table.horizontalHeader().setSectionResizeMode(table.columnCount() - 3, QHeaderView.Fixed)
-
         table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # 当需要时显示垂直滚动条
-
-        # 禁止编辑
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        # 禁止选择单元格
         table.setSelectionMode(QAbstractItemView.NoSelection)
-        # 固定表头
-        # table.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
-
         table.setStyleSheet(self.table_style)
         table.setObjectName(sensor_name)
 
@@ -222,7 +211,7 @@ class DataCollectionAllWindow(BaseWindow):
         label_5.setMaximumSize(int(groupbox_4.width() * 0.7), 100)
         label_5.setMinimumSize(int(groupbox_4.width() * 0.2), 20)
         cb_5 = QComboBox(maximumWidth=300)
-        cb_5.addItems(['不保存','追加', '覆盖'])
+        cb_5.addItems(['不保存', '追加', '覆盖'])
         cb_5.setObjectName('cb_5')
         for i in [label_4, label_5, cb_4, cb_5]:
             font.setPointSize(23)
@@ -245,66 +234,29 @@ class DataCollectionAllWindow(BaseWindow):
         self.groupbox_threshold[sensor_name].setFont(font)
         self.groupbox_threshold[sensor_name].setStyleSheet("background-color:white;")
 
+        # 创建输入框
+        threshold_layout = QHBoxLayout()
+        self.threshold_inputs[sensor_name] = {}
+        self.column_weigets[sensor_name] = {}
+        self.show_count[sensor_name] = {}
+        for param_name in param_names:
+            column_weiget = self.add_columnlayout(sensor_name,param_name)
+
+            threshold_layout.addWidget(column_weiget)
+
+
+        self.groupbox_threshold[sensor_name].setLayout(threshold_layout)
+
         # 创建滚动区域
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_widget = QWidget()
-        scroll_area.setWidget(scroll_widget)
-
-        threshold_layout = QHBoxLayout(scroll_widget)
-
-        # 创建输入框
-        self.threshold_inputs[sensor_name] = {}
-        self.show_count[sensor_name] = {}
-        horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        for param_name in param_names:
-            h_layout = QVBoxLayout()
-            max_label = QLabel(f"{param_name} 最大阈值:")
-            max_input = QLineEdit()
-            max_count_text = QLabel("超最大阙值次数：")
-            max_count_lable = QLabel("-1")  # 超最大阈值次数显示
-            min_label = QLabel(f"{param_name} 最小阈值:")
-            min_count_text = QLabel("超最小阙值次数：")
-            min_count_lable = QLabel("-1")  # 超最小阈值次数显示
-            min_input = QLineEdit()
-
-            h_layout.addWidget(max_label)
-            h_layout.addWidget(max_input)
-            h_layout.addSpacerItem(horizontalSpacer)
-            h_layout.addWidget(max_count_text)
-            h_layout.addWidget(max_count_lable)
-            h_layout.addSpacerItem(horizontalSpacer)
-            h_layout.addWidget(min_label)
-            h_layout.addWidget(min_input)
-            h_layout.addSpacerItem(horizontalSpacer)
-            h_layout.addWidget(min_count_text)
-            h_layout.addWidget(min_count_lable)
-
-            threshold_layout.addLayout(h_layout)
-
-            self.threshold_inputs[sensor_name][param_name] = {'max': max_input, 'min': min_input}
-            self.show_count[sensor_name][param_name] = [max_count_lable, min_count_lable]
-
-        # 添加超阈值次数显示按钮
-        # max_count_button = QPushButton("超最大阈值")
-        # min_count_button = QPushButton("超最小阈值")
-        # btn_css(max_count_button)
-        # btn_css(min_count_button)
-        # max_count_button.clicked.connect(lambda: self.show_threshold_count_for_current_tab('max'))
-        # min_count_button.clicked.connect(lambda: self.show_threshold_count_for_current_tab('min'))
-
-        # count_layout = QVBoxLayout()
-        # count_layout.addWidget(max_count_button)
-        # count_layout.addWidget(min_count_button)
-        # threshold_layout.addLayout(count_layout)
-
-        self.groupbox_threshold[sensor_name].setLayout(threshold_layout)
+        scroll_area.setWidget(self.groupbox_threshold[sensor_name])
 
         # 创建垂直布局
         VLayout = QVBoxLayout()
         VLayout.addWidget(table)
         VLayout.addWidget(groupbox_4)
-        VLayout.addWidget(self.groupbox_threshold[sensor_name])
+        VLayout.addWidget(scroll_area)
 
         # 创建一个 QWidget 作为标签页的内容
         widget = QWidget()
@@ -317,6 +269,67 @@ class DataCollectionAllWindow(BaseWindow):
         table.setContextMenuPolicy(Qt.CustomContextMenu)
         table.customContextMenuRequested.connect(self.show_context_menu)
         return widget
+
+    def add_columnlayout(self,sensor_name,param_name):
+        """添加阙值控件"""
+        horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        column_weiget = QWidget()
+        column_layout = QVBoxLayout()
+        max_label = QLabel(f"{param_name} 最大阈值:")
+        max_input = QLineEdit()
+        max_count_text = QLabel("超最大阙值次数：")
+        max_count_lable = QLabel("-1")  # 超最大阈值次数显示
+        min_label = QLabel(f"{param_name} 最小阈值:")
+        min_count_text = QLabel("超最小阙值次数：")
+        min_count_lable = QLabel("-1")  # 超最小阈值次数显示
+        min_input = QLineEdit()
+
+        column_layout.addWidget(max_label)
+        column_layout.addWidget(max_input)
+        column_layout.addSpacerItem(horizontalSpacer)
+        column_layout.addWidget(max_count_text)
+        column_layout.addWidget(max_count_lable)
+        column_layout.addSpacerItem(horizontalSpacer)
+        column_layout.addWidget(min_label)
+        column_layout.addWidget(min_input)
+        column_layout.addSpacerItem(horizontalSpacer)
+        column_layout.addWidget(min_count_text)
+        column_layout.addWidget(min_count_lable)
+
+        column_weiget.setLayout(column_layout)
+
+        self.column_weigets[sensor_name][param_name] = column_weiget
+        self.threshold_inputs[sensor_name][param_name] = {'max': max_input, 'min': min_input}
+        self.show_count[sensor_name][param_name] = [max_count_lable, min_count_lable]
+        return column_weiget
+
+    def del_columnlayout(self, sensor_name, param_name):
+        """删除阈值控件"""
+        try:
+            # 从 threshold_inputs 中删除输入控件
+            if sensor_name in self.threshold_inputs and param_name in self.threshold_inputs[sensor_name]:
+                del self.threshold_inputs[sensor_name][param_name]
+
+            # 从 show_count 中删除计数标签
+            if sensor_name in self.show_count and param_name in self.show_count[sensor_name]:
+                del self.show_count[sensor_name][param_name]
+
+            # 从 column_weigets 中删除控件
+            if sensor_name in self.column_weigets and param_name in self.column_weigets[sensor_name]:
+                column_weiget = self.column_weigets[sensor_name][param_name]
+                if column_weiget and isinstance(column_weiget, QWidget):
+                    try:
+                        # # 从布局中移除 column_weiget
+                        # layout = column_weiget.parent().layout()
+                        # if layout:
+                        #     layout.removeWidget(column_weiget)
+                        # # 删除 column_weiget
+                        # column_weiget.deleteLater()
+                        del self.column_weigets[sensor_name][param_name]
+                    except Exception as e:
+                        print(f"Error removing widget: {e}")
+        except Exception as e:
+            self.show_message("删除阙值控件发生错误：",e)
 
     """ ---------------阙值统计 - --------------------"""
 
@@ -336,6 +349,8 @@ class DataCollectionAllWindow(BaseWindow):
 
     def show_threshold_count(self, sensor_name, threshold_type):
         for param_name, inputs in self.threshold_inputs[sensor_name].items():
+            if param_name not in self.show_count[sensor_name]:
+                continue
             if threshold_type == 'max':
                 count_label = self.show_count[sensor_name][param_name][0]
                 threshold_value = inputs['max'].text()
@@ -780,369 +795,88 @@ class DataCollectionAllWindow(BaseWindow):
         return None
 
     """ ----------------CSV操作---------------------"""
-
-    # def import_table(self):
-    #     """从 CSV 文件中导入数据到表格，筛选当前状态相同的数据"""
-    #     options = QFileDialog.Options()
-    #     options |= QFileDialog.DontUseNativeDialog
-    #
-    #     # 选择文件或目录
-    #     files, _ = QFileDialog.getOpenFileNames(self, "选择 CSV 文件", "", "CSV Files (*.csv);;All Files (*)",
-    #                                             options=options)
-    #     if not files:
-    #         directory = QFileDialog.getExistingDirectory(self, "选择包含 CSV 文件的目录")
-    #         if directory:
-    #             files = [os.path.join(directory, f) for f in os.listdir(directory) if fnmatch.fnmatch(f, "*.csv")]
-    #
-    #     if not files:
-    #         return
-    #
-    #     for file_path in files:
-    #         try:
-    #             with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
-    #                 reader = csv.reader(csvfile)
-    #                 headers = next(reader)  # 读取表头
-    #
-    #                 # 确保表头符合预期
-    #                 if len(headers) < 3 or headers[-3] != '更新时间' or headers[-2] != '状态' or headers[
-    #                     -1] != '传感器名称':
-    #                     raise ValueError("CSV 文件格式不正确")
-    #
-    #                 # 获取文件名（不包括扩展名）
-    #                 file_name = os.path.splitext(os.path.basename(file_path))[0]
-    #
-    #                 # 查找与文件名相同的标签页
-    #                 current_tab = self.get_tab_by_name(file_name)
-    #                 if current_tab is None:
-    #                     QMessageBox.warning(None, "警告", f"未找到名为 {file_name} 的标签页")
-    #                     continue
-    #                 table = current_tab.findChild(QTableWidget)
-    #                 if table is None:
-    #                     QMessageBox.warning(None, "警告", f"标签页 {file_name} 中没有找到 QTableWidget")
-    #                     continue
-    #
-    #                 cb_4 = current_tab.findChild(QComboBox, "cb_4")  # 获取当前标签页的 cb_4
-    #                 if cb_4 is None:
-    #                     QMessageBox.warning(None, "警告", f"标签页 {file_name} 中没有找到名为 cb_4 的 QComboBox")
-    #                     continue
-    #
-    #                 current_status = cb_4.currentText()  # 当前传感器的状态
-    #
-    #                 # 清空表格
-    #                 table.setRowCount(self.tRN)
-    #
-    #                 # 读取并过滤数据
-    #                 for row in reader:
-    #                     if row[-2] == current_status and row[-1] == file_name:
-    #                         table.insertRow(table.rowCount())
-    #                         for i, item in enumerate(row[:-3]):
-    #                             table.setItem(table.rowCount() - self.tRN, i, QTableWidgetItem(item))
-    #                         # 添加编辑按钮
-    #                         self.add_edit_button(table, table.rowCount() - self.tRN)
-    #
-    #                         # 添加删除按钮
-    #                         self.add_delete_button(table, table.rowCount() - self.tRN)
-    #
-    #                         table.setItem(table.rowCount() - self.tRN, table.columnCount() - 3,
-    #                                       QTableWidgetItem(datetime.datetime.now().strftime(config.time_format)))
-    #
-    #         except Exception as e:
-    #             QMessageBox.critical(None, "错误", f"导入文件 {file_path} 时发生错误: {str(e)}")
-    #
-    #     QMessageBox.information(None, "导入成功", "已将数据导入到表格中")
-    #
-    # def export_table(self):
-    #     """将表格中的数据导出为 CSV 文件"""
-    #     directory = QFileDialog.getExistingDirectory(self, "选择导出目录")
-    #     if directory:
-    #         try:
-    #             validate_directory(directory)
-    #         except ValueError as e:
-    #             QMessageBox.critical(None, "错误", str(e))
-    #             return
-    #
-    #         for i in range(self.tab_widget.count()):
-    #             current_tab = self.tab_widget.widget(i)
-    #             table = current_tab.findChild(QTableWidget)
-    #             sensor_name = self.tab_widget.tabText(i)
-    #             cb_4 = current_tab.findChild(QComboBox, "cb_4")  # 获取当前标签页的 cb_4
-    #             cb_5 = current_tab.findChild(QComboBox, "cb_5")  # 获取当前标签页的 cb_5
-    #
-    #             file_path = os.path.join(directory, f"{sensor_name}.csv")
-    #
-    #             if not prompt_overwrite(file_path,cb_5.currentText()):
-    #                 continue
-    #
-    #             mode = 'a' if cb_5.currentText() == '追加' else '覆盖'
-    #             with open(file_path, mode, newline='', encoding='utf-8') as csvfile:
-    #                 writer = csv.writer(csvfile)
-    #
-    #                 if mode == '覆盖':
-    #                     headers = [table.horizontalHeaderItem(j).text() for j in range(table.columnCount() - 3)]
-    #                     headers += ['更新时间', '状态', '传感器名称']
-    #                     writer.writerow(headers)
-    #
-    #                 for row in range(self.tRN, table.rowCount()):
-    #                     row_data = []
-    #                     for column in range(table.columnCount() - 3):
-    #                         item = table.item(row, column)
-    #                         if item is not None:
-    #                             row_data.append(item.text())
-    #                         else:
-    #                             row_data.append('')
-    #                     update_time = table.item(row, table.columnCount() - 3).text()
-    #                     status = cb_4.currentText()  # 使用当前标签页的 cb_4
-    #                     row_data += [update_time, status, sensor_name]
-    #                     writer.writerow(row_data)
-    #
-    #         QMessageBox.information(None, "导出成功", f"已将表格中的数据导出到指定目录")
-
-    # def import_table(self):
-    #     try:
-    #         # 选择目录
-    #         directory = QFileDialog.getExistingDirectory(self, "选择包含 XLSX 文件的目录")
-    #         if not directory:
-    #             return
-    #
-    #         # 遍历所有标签页的名称
-    #         for index in range(self.tab_widget.count()):
-    #             tab_name = self.tab_widget.tabText(index)
-    #             sensor_name = tab_name.split('-')[0]  # 提取传感器名称
-    #
-    #             # 查找与传感器名称匹配的子目录
-    #             sensor_directory = os.path.join(directory, sensor_name)
-    #             if not os.path.exists(sensor_directory):
-    #                 continue
-    #
-    #             # 读取文件名与传感器状态相同的 XLSX 文件
-    #             for file_name in os.listdir(sensor_directory):
-    #                 current_tab = self.tab_widget.widget(index)
-    #                 if current_tab is None:
-    #                     continue
-    #                 if file_name.split('.')[0] == current_tab.findChild(QComboBox, "cb_4").currentText() and fnmatch.fnmatch(file_name, "*.xlsx"):
-    #                     file_path = os.path.join(sensor_directory, file_name)
-    #                     status = file_name.split('.')[0]  # 提取文件名中的状态
-    #
-    #                     # 读取 XLSX 文件
-    #                     try:
-    #                         df = pd.read_excel(file_path)
-    #                     except Exception as e:
-    #                         QMessageBox.critical(None, "错误", f"读取文件 {file_path} 时发生错误: {str(e)}")
-    #                         continue
-    #
-    #                     # 查找对应的表格
-    #
-    #                     table = current_tab.findChild(QTableWidget)
-    #                     if table is None:
-    #                         QMessageBox.warning(None, "警告", f"标签页 {tab_name} 中没有找到 QTableWidget")
-    #                         continue
-    #
-    #                     # 删除除最后三列以外的所有列
-    #                     for col in range(table.columnCount() - 3):
-    #                         table.removeColumn(0)
-    #                     table.setRowCount(self.tRN)
-    #                     # 重新设置列名
-    #                     param_names = list(df['name'].unique())
-    #                     table.setColumnCount(len(param_names) + 3)  # 增加三列用于编辑、删除按钮和更新时间
-    #                     table.setHorizontalHeaderLabels(param_names + ['更新时间', '编辑', '删除'])
-    #
-    #                     # 插入数据
-    #                     data_dict = {}
-    #                     for index, row in df.iterrows():
-    #                         time = str(row['Time'])
-    #                         name = row['name']
-    #                         value = row['value']
-    #
-    #                         if time not in data_dict:
-    #                             data_dict[time] = {}
-    #
-    #                         data_dict[time][name] = value
-    #
-    #                     for time, values in data_dict.items():
-    #                         # 插入新行
-    #                         row_index = table.rowCount()
-    #                         table.insertRow(row_index)
-    #                         table.setRowHeight(row_index, 40)
-    #
-    #                         # 填充参数值
-    #                         for param_name, param_value in values.items():
-    #                             col_index = param_names.index(param_name)
-    #                             if col_index is not None:
-    #                                 table.setItem(row_index, col_index, QTableWidgetItem(str(param_value)))
-    #
-    #                         # 添加更新时间列
-    #                         table.setItem(row_index, table.columnCount() - 3, QTableWidgetItem(time))
-    #
-    #                         # 添加编辑和删除按钮
-    #                         self.add_edit_button(table, row_index)
-    #                         self.add_delete_button(table, row_index)
-    #
-    #                     table.refresh_table()
-    #         QMessageBox.information(None, "导入成功", "已将数据导入到表格中")
-    #     except Exception as e:
-    #         QMessageBox.critical(None, "错误", f"导入数据时发生错误: {str(e)}")
-    # def import_table(self):
-    #     try:
-    #         # 选择文件
-    #         # file_dialog = QFileDialog(self)
-    #         # file_dialog.setNameFilter("Data files (*.csv *.xlsx)")
-    #         file_path, _ = QFileDialog.getOpenFileName(self, "选择文件", "", "Data files (*.csv *.xlsx)")
-    #         if not file_path:
-    #             return
-    #         # if file_dialog.exec_():
-    #         #     file_path = file_dialog.selectedFiles()[0]
-    #         #     if not file_path:
-    #         #         return
-    #
-    #         # 获取当前选中的标签页
-    #         current_index = self.tab_widget.currentIndex()
-    #         if current_index < 0:
-    #             QMessageBox.warning(None, "警告", "请选择一个标签页")
-    #             return
-    #
-    #         current_tab = self.tab_widget.widget(current_index)
-    #         if current_tab is None:
-    #             QMessageBox.warning(None, "警告", "当前标签页无效")
-    #             return
-    #
-    #         # 读取文件
-    #         try:
-    #             if file_path.endswith('.csv'):
-    #                 df = pd.read_csv(file_path)
-    #             elif file_path.endswith('.xlsx'):
-    #                 df = pd.read_excel(file_path)
-    #             else:
-    #                 raise ValueError("不支持的文件类型")
-    #         except Exception as e:
-    #             QMessageBox.critical(None, "错误", f"读取文件 {file_path} 时发生错误: {str(e)}")
-    #             return
-    #
-    #         # 查找对应的表格
-    #         table = current_tab.findChild(QTableWidget)
-    #         if table is None:
-    #             QMessageBox.warning(None, "警告", "当前标签页中没有找到 QTableWidget")
-    #             return
-    #
-    #         # 删除除最后三列以外的所有列
-    #         for col in range(table.columnCount() - 3):
-    #             table.removeColumn(0)
-    #         table.setRowCount(self.tRN)
-    #         # 重新设置列名
-    #         param_names = list(df['name'].unique())
-    #         table.setColumnCount(len(param_names) + 3)  # 增加三列用于编辑、删除按钮和更新时间
-    #         table.setHorizontalHeaderLabels(param_names + ['更新时间', '编辑', '删除'])
-    #
-    #         # 插入数据
-    #         data_dict = {}
-    #         for index, row in df.iterrows():
-    #             time = str(row['Time'])
-    #             name = row['name']
-    #             value = row['value']
-    #
-    #             if time not in data_dict:
-    #                 data_dict[time] = {}
-    #
-    #             data_dict[time][name] = value
-    #
-    #         for time, values in data_dict.items():
-    #             # 插入新行
-    #             row_index = table.rowCount()
-    #             table.insertRow(row_index)
-    #             table.setRowHeight(row_index, 40)
-    #
-    #             # 填充参数值
-    #             for param_name, param_value in values.items():
-    #                 col_index = param_names.index(param_name)
-    #                 if col_index is not None:
-    #                     table.setItem(row_index, col_index, QTableWidgetItem(str(param_value)))
-    #
-    #             # 添加更新时间列
-    #             table.setItem(row_index, table.columnCount() - 3, QTableWidgetItem(time))
-    #
-    #             # 添加编辑和删除按钮
-    #             self.add_edit_button(table, row_index)
-    #             self.add_delete_button(table, row_index)
-    #
-    #         table.refresh_table()
-    #         QMessageBox.information(None, "导入成功", "已将数据导入到表格中")
-    #     except Exception as e:
-    #         QMessageBox.critical(None, "错误", f"导入数据时发生错误: {str(e)}")
+    def import_table(self):
+        super().import_table()
 
     def export_table(self):
-        """将表格中的数据导出为 XLSX 文件"""
-        try:
-            directory = QFileDialog.getExistingDirectory(self, "选择导出目录")
-            if directory:
-                try:
-                    validate_directory(directory)
-                except ValueError as e:
-                    QMessageBox.critical(None, "错误", str(e))
-                    return
-
-                for i in range(self.tab_widget.count()):
-                    current_tab = self.tab_widget.widget(i)
-                    table = current_tab.findChild(QTableWidget)
-                    sensor_name = self.tab_widget.tabText(i)
-                    cb_4 = current_tab.findChild(QComboBox, "cb_4")  # 获取当前标签页的 cb_4
-                    cb_5 = current_tab.findChild(QComboBox, "cb_5")  # 获取当前标签页的 cb_5
-
-                    flodr_path = os.path.join(directory, sensor_name)
-                    exists_path(flodr_path)
-                    file_path = os.path.join(flodr_path, f"{cb_4.currentText()}.xlsx")
-                    mode = cb_5.currentText()
-                    if mode == "不保存":
-                        continue
-                    if not prompt_overwrite(file_path, cb_5.currentText()):
-                        continue
-
-                    if mode == '覆盖':
-                        data = []
-                        for row in range(self.tRN, table.rowCount()):
-                            for col in range(table.columnCount() - 3):  # 假设前几列为参数
-                                item = table.item(row, col)
-                                if item is not None:
-                                    data.append({
-                                        'id': row + 1,
-                                        'name': table.horizontalHeaderItem(col).text(),
-                                        'value': item.text(),
-                                        'Time': table.item(row, table.columnCount() - 3).text()
-                                    })
-
-                        df = pd.DataFrame(data, columns=['id', 'name', 'value', 'Time'])
-                        df.to_excel(file_path, index=False)
-                    elif mode == '追加':
-                        existing_df = pd.read_excel(file_path)
-                        new_data = []
-                        df_row = 0
-                        for row in range(self.tRN, table.rowCount()):
-                            now_time = get_time_now(row)
-                            for col in range(table.columnCount() - 3):  # 假设前几列为参数
-                                item = table.item(row, col)
-                                update_time_str = table.item(row, table.columnCount() - 3).text()
-                                try:
-                                    update_time = datetime.strptime(update_time_str, "%d/%m/%Y %H:%M:%S")
-                                except:
-                                    update_time = now_time
-                                if item is not None:
-                                    new_data.append({
-                                        'id': df_row,
-                                        'name': table.horizontalHeaderItem(col).text(),
-                                        'value': item.text(),
-                                        'Time': update_time
-                                    })
-                                    df_row += 1
-
-                        new_df = pd.DataFrame(new_data, columns=['id', 'name', 'value', 'Time'])
-                        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
-                        combined_df.to_excel(file_path, index=False)
-
-                QMessageBox.information(None, "导出成功", f"已将表格中的数据导出到指定目录")
-        except Exception as e:
-            QMessageBox.critical(None, "错误", f"导出文件时发生错误: {str(e)}")
+        super().export_table('运维')
+    # def export_table(self):
+    #     """将表格中的数据导出为 XLSX 文件"""
+    #     try:
+    #         directory = QFileDialog.getExistingDirectory(self, "选择导出目录")
+    #         if directory:
+    #             try:
+    #                 validate_directory(directory)
+    #             except ValueError as e:
+    #                 QMessageBox.critical(None, "错误", str(e))
+    #                 return
+    #
+    #             for i in range(self.tab_widget.count()):
+    #                 current_tab = self.tab_widget.widget(i)
+    #                 table = current_tab.findChild(QTableWidget)
+    #                 sensor_name = self.tab_widget.tabText(i)
+    #                 cb_4 = current_tab.findChild(QComboBox, "cb_4")  # 获取当前标签页的 cb_4
+    #                 cb_5 = current_tab.findChild(QComboBox, "cb_5")  # 获取当前标签页的 cb_5
+    #
+    #                 flodr_path = os.path.join(directory, sensor_name)
+    #                 exists_path(flodr_path)
+    #                 file_path = os.path.join(flodr_path, f"{cb_4.currentText()}.xlsx")
+    #                 mode = cb_5.currentText()
+    #                 if mode == "不保存":
+    #                     continue
+    #                 if not prompt_overwrite(file_path, cb_5.currentText()):
+    #                     continue
+    #
+    #                 if mode == '覆盖':
+    #                     data = []
+    #                     for row in range(self.tRN, table.rowCount()):
+    #                         for col in range(table.columnCount() - 3):  # 假设前几列为参数
+    #                             item = table.item(row, col)
+    #                             if item is not None:
+    #                                 data.append({
+    #                                     'id': row + 1,
+    #                                     'name': table.horizontalHeaderItem(col).text(),
+    #                                     'value': item.text(),
+    #                                     'Time': table.item(row, table.columnCount() - 3).text()
+    #                                 })
+    #
+    #                     df = pd.DataFrame(data, columns=['id', 'name', 'value', 'Time'])
+    #                     df.to_excel(file_path, index=False)
+    #                 elif mode == '追加':
+    #                     existing_df = pd.read_excel(file_path)
+    #                     new_data = []
+    #                     df_row = 0
+    #                     for row in range(self.tRN, table.rowCount()):
+    #                         now_time = get_time_now(row)
+    #                         for col in range(table.columnCount() - 3):  # 假设前几列为参数
+    #                             item = table.item(row, col)
+    #                             update_time_str = table.item(row, table.columnCount() - 3).text()
+    #                             try:
+    #                                 update_time = datetime.strptime(update_time_str, "%d/%m/%Y %H:%M:%S")
+    #                             except:
+    #                                 update_time = now_time
+    #                             if item is not None:
+    #                                 new_data.append({
+    #                                     'id': df_row,
+    #                                     'name': table.horizontalHeaderItem(col).text(),
+    #                                     'value': item.text(),
+    #                                     'Time': update_time
+    #                                 })
+    #                                 df_row += 1
+    #
+    #                     new_df = pd.DataFrame(new_data, columns=['id', 'name', 'value', 'Time'])
+    #                     combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+    #                     combined_df.to_excel(file_path, index=False)
+    #
+    #             QMessageBox.information(None, "导出成功", f"已将表格中的数据导出到指定目录")
+    #     except Exception as e:
+    #         QMessageBox.critical(None, "错误", f"导出文件时发生错误: {str(e)}")
 
 
     """ ----------------数据库操作---------------------"""
-
+    def load_to_db(self):
+        super().load_to_db()
+        self.solt_table.refresh_table()
     def save_data(self):
         '''槽：保存数据'''
         # 请求用户确认
@@ -1169,109 +903,6 @@ class DataCollectionAllWindow(BaseWindow):
                 # 清空
                 pass
         QMessageBox.information(None, "保存成功", f"已将表格内容保存到数据库中")
-
-
-    def save_to_db(self, mode='覆盖', current_tab=None):
-        """
-        将表格内容保存到数据库表中。
-
-        :param mode: 模式
-        :param current_tab: 当前标签页
-        """
-        if mode == '不保存':
-            return
-        if current_tab is None:
-            current_tab = self.tab_widget.currentWidget()
-
-        cb_4 = current_tab.findChild(QComboBox, "cb_4")
-        cb_5 = current_tab.findChild(QComboBox, "cb_5")
-
-        try:
-            with self.db:
-                # 开始事务
-                self.db.begin_transaction()
-
-                data = []
-                # 传感器
-                table = current_tab.findChild(QTableWidget)
-                row_count = table.rowCount()
-                column_count = table.columnCount() - 3  # 排除编辑、删除按钮和更新时间列
-                sensor_name = self.tab_widget.tabText(self.tab_widget.indexOf(current_tab))
-                # 参数
-                for row in range(self.tRN, row_count):
-                    row_data = {}
-                    params = {}
-                    for column in range(column_count):
-                        item = table.item(row, column)
-                        if item is not None:
-                            params[table.horizontalHeaderItem(column).text()] = item.text()
-                        else:
-                            params[table.horizontalHeaderItem(column).text()] = ""
-                    def are_all_values_empty(d):
-                        return all(value is None or value == '' for value in d.values())
-                    if are_all_values_empty(params):
-                        continue
-                    # 更新时间
-                    update_time_str = table.item(row, table.columnCount() - 3).text()
-                    try:
-                        update_time = datetime.datetime.strptime(update_time_str, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
-                    except:
-                        update_time = get_time_now(row)
-                    row_data['status'] = cb_4.currentText()  # 状态
-                    row_data['update_time'] = update_time  # 更新时间
-                    row_data['sensor_name'] = sensor_name  # 传感器名称
-                    row_data['params'] = json.dumps(params)  #
-                    data.append(row_data)
-
-                if mode == '覆盖':
-                    self.db.delete_data(self.table_name,
-                                        f"status = '{cb_4.currentText()}' AND sensor_name = '{sensor_name}'")
-                # 插入数据
-                self.db.bulk_insert_data(self.table_name, data)
-                # 提交事务
-                self.db.commit_transaction()
-        except Exception as e:
-            self.db.rollback_transaction()
-            QMessageBox.critical(None, "错误", f"保存数据时发生错误: {str(e)}")
-
-    def load_to_db(self):
-        """从数据库中读取数据"""
-        try:
-            with self.db:
-                # 一次性查询所有数据
-                all_data = self.db.select_data(self.table_name)
-
-                self.load_batch_size = 300  # 每批写入的行数
-
-                for index in range(self.tab_widget.count()):
-                    current_tab = self.tab_widget.widget(index)
-                    table = current_tab.findChild(QTableWidget)
-                    table.setRowCount(self.tRN)  # 清空表格
-
-                    # 获取当前标签页的传感器名称和状态
-                    sensor_name = self.tab_widget.tabText(index)
-                    current_status = current_tab.findChild(QComboBox, "cb_4").currentText()
-
-                    # 过滤数据
-                    self.filtered_data = [row for row in all_data if
-                                     row['sensor_name'] == sensor_name and row['status'] == current_status]
-                    self.batch_num = 0
-                    # 分批写入数据
-                    for i in range(0, len(self.filtered_data), self.load_batch_size ):
-                        batch = self.filtered_data[i:i + self.load_batch_size ]
-                        self._single_import_table_db.emit((batch, table))
-                        # # 处理完一批数据后，刷新表格
-                        # table.viewport().update()
-
-                # self.refresh_tables_form_time()
-                QMessageBox.information(None, "加载成功", "已从数据库中加载数据")
-        except Exception as e:
-            QMessageBox.critical(None, "错误", f"加载数据时发生错误：{str(e)}")
-
-    # 更新传感器配置
-
-    def get_sensor_by_name(self, sensor_name):
-        return next((s for s in self.sensors if s['sensor_name'] == sensor_name), None)
 
     def update_ui(self):
         # 获取最新的传感器信息
@@ -1320,6 +951,8 @@ class DataCollectionAllWindow(BaseWindow):
                     for col in range(table.columnCount() - 1, -1, -1):
                         if table.horizontalHeaderItem(col).text() not in new_headers:
                             table.removeColumn(col)
+                            # 删除对应的 column_layout
+                            self.remove_threshold_layout(sensor_name, col)
 
                     # 添加新列
                     for header in new_headers:
@@ -1327,6 +960,8 @@ class DataCollectionAllWindow(BaseWindow):
                             table.insertColumn(table.columnCount() - 3)  # 在倒数第三列之前插入新列
                             item = QTableWidgetItem(header)
                             table.setHorizontalHeaderItem(table.columnCount() - 4, item)  # 设置新列的标题
+                            # 添加对应的 column_layout
+                            self.add_threshold_layout(sensor_name, header)
 
                     # 更新状态列表 cb_4
                     cb_4 = tab.findChild(QComboBox, 'cb_4')
@@ -1334,79 +969,22 @@ class DataCollectionAllWindow(BaseWindow):
                         cb_4.clear()
                         cb_4.addItems(sensor['status_list'])
 
-                    # 更新 groupbox_threshold
-                    # self._single_update_groupbox.emit( sensor)
-                    # self.update_groupbox_threshold(sensor)
+                    # self.update_threshold_controls(sensor_name, new_headers)
 
-    def update_groupbox_threshold(self, sensor):
-        try:
-            sensor_name = sensor['sensor_name']
-            param_names = sensor['param_name']
+    def remove_threshold_layout(self, sensor_name, index):
+        if sensor_name in self.groupbox_threshold:
+            if isinstance(self.column_weigets[sensor_name], dict)  and index < len(self.column_weigets[sensor_name]):
+                param_name = list(self.column_weigets[sensor_name].keys())[index]
+                self.del_columnlayout(sensor_name,param_name)
 
-            # 获取 groupbox_threshold
-            # groupbox_threshold = tab.findChild(QGroupBox, 'groupBox_threshold')
-            groupbox_threshold = self.groupbox_threshold[sensor_name] if sensor_name in self.groupbox_threshold else None
-            if groupbox_threshold:
-                # 清除现有的布局
-                layout = groupbox_threshold.layout()
-                self.clear_layout(layout)
+    def add_threshold_layout(self, sensor_name, param_name):
+        if sensor_name in self.groupbox_threshold:
+            groupbox = self.groupbox_threshold[sensor_name]
+            layout = groupbox.layout()
+            column_weiget = self.add_columnlayout(sensor_name,param_name)
 
-                # 重新创建输入框和标签
-                self.threshold_inputs[sensor_name] = {}
-                self.show_count[sensor_name] = {}
-                horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-                for param_name in param_names:
-                    h_layout = QVBoxLayout()
-                    max_label = QLabel(f"{param_name} 最大阈值:")
-                    max_input = QLineEdit()
-                    max_count_text = QLabel("超最大阈值次数：")
-                    max_count_label = QLabel("-1")  # 超最大阈值次数显示
-                    min_label = QLabel(f"{param_name} 最小阈值:")
-                    min_count_text = QLabel("超最小阈值次数：")
-                    min_count_label = QLabel("-1")  # 超最小阈值次数显示
-                    min_input = QLineEdit()
+            layout.addWidget(column_weiget)
 
-                    h_layout.addWidget(max_label)
-                    h_layout.addWidget(max_input)
-                    h_layout.addSpacerItem(horizontalSpacer)
-                    h_layout.addWidget(max_count_text)
-                    h_layout.addWidget(max_count_label)
-                    h_layout.addSpacerItem(horizontalSpacer)
-                    h_layout.addWidget(min_label)
-                    h_layout.addWidget(min_input)
-                    h_layout.addSpacerItem(horizontalSpacer)
-                    h_layout.addWidget(min_count_text)
-                    h_layout.addWidget(min_count_label)
-
-                    layout.addLayout(h_layout)
-
-                    self.threshold_inputs[sensor_name][param_name] = {'max': max_input, 'min': min_input}
-                    self.show_count[sensor_name][param_name] = [max_count_label, min_count_label]
-
-                # 添加超阈值次数显示按钮
-                max_count_button = QPushButton("超最大阈值")
-                min_count_button = QPushButton("超最小阈值")
-                max_count_button.clicked.connect(lambda: self.show_threshold_count_for_current_tab('max'))
-                min_count_button.clicked.connect(lambda: self.show_threshold_count_for_current_tab('min'))
-
-                count_layout = QVBoxLayout()
-                count_layout.addWidget(max_count_button)
-                count_layout.addWidget(min_count_button)
-                layout.addLayout(count_layout)
-
-                groupbox_threshold.setLayout(layout)
-        except Exception as e:
-            self.show_message(f"更新阙值布局时出错:", {str(e)})
-
-    def clear_layout(self, layout):
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
-                else:
-                    self.clear_layout(item.layout())
 def main():
     app = QApplication(sys.argv)
     ex = DataCollectionAllWindow()

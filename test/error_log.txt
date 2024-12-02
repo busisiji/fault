@@ -1,0 +1,4 @@
+Error editing status list for 震动传感器: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sensor_name': '震动传感器'}' at line 1")
+Error editing status list for 震动传感器: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sensor_name': '震动传感器'}' at line 1")
+Error editing status list for 震动传感器: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sensor_name': '震动传感器'}' at line 1")
+Error editing status list for 震动传感器: 'DB_MySQL' object has no attribute 'execute'

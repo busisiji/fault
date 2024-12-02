@@ -6,7 +6,7 @@ from collections import Counter
 
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, QObject, QRunnable
 from PyQt5.QtWidgets import QMessageBox, QLabel
 from pandas import DataFrame
 
@@ -52,7 +52,7 @@ class NewMyThread(QThread):
         try:
             self.result = self.func(*self.args)
         except Exception as e:
-            self._signal.emit(e)
+            self._signal.emit(str(e.args))
         else:
             self._signal.emit('OK')
 

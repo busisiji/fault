@@ -11,7 +11,8 @@ from PyQt5.uic.properties import QtCore
 
 import config
 from lib.sequential_model import get_result, start
-from ui.others.ui_fun import BaseWindow, MyFigure
+from ui.others.ui_fun import MyFigure
+from ui.Base.baseWindow import BaseWindow
 
 
 class DeepLearningWindow(BaseWindow):

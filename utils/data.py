@@ -1,3 +1,4 @@
+# coding: utf-8
 def convert_data(self, raw_data, data_type):
     """
     根据数据类型转换原始数据。

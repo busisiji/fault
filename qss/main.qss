@@ -1,0 +1,6 @@
+QCheckBox:enabled:checked,QRadioButton:enabled:checked{{
+	color: red;
+}}
+QCheckBox:enabled:hover,QRadioButton:enabled:hover{{
+ 	color: rgb(0, 200, 0);
+}}
